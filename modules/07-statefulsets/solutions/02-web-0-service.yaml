@@ -1,0 +1,27 @@
+# Solution to exercise 2 - a normal ClusterIP Service that always reaches
+# web-0 and nothing else.
+#
+# Every StatefulSet pod carries two identity labels set by the controller:
+#   statefulset.kubernetes.io/pod-name: web-0
+#   apps.kubernetes.io/pod-index: "0"        (label values are strings!)
+# Selecting on one of them gives you a stable virtual IP for one member -
+# handy for "the primary is always ordinal 0" designs or for exposing each
+# member separately (e.g. one LoadBalancer per Kafka broker).
+#
+#   kubectl apply -f solutions/02-web-0-service.yaml
+#   kubectl exec -n lab-statefulsets client -- wget -qO- http://web-0-only
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-0-only
+  namespace: lab-statefulsets
+  labels:
+    app: web
+spec:
+  selector:
+    app: web
+    statefulset.kubernetes.io/pod-name: web-0
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

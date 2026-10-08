@@ -1,0 +1,141 @@
+# NetworkPolicies: only the traffic the app needs (module 13).
+#
+#   ingress controller --8080--> frontend --8080--> backend --5432--> db
+#                                                   seed job, backup -^
+#   every pod --53--> cluster DNS
+#
+# Policies are additive allow-lists: once ANY policy selects a pod for a
+# direction (ingress/egress), only traffic some policy allows is permitted.
+# kubectl port-forward does not go through the pod network, so it keeps
+# working (that's how verify.sh tests the app).
+---
+# 1. Deny everything, in both directions, for every pod in the namespace.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: lab-capstone
+  labels:
+    app: capstone
+spec:
+  podSelector: {}
+  policyTypes: ["Ingress", "Egress"]
+---
+# 2. Every pod may resolve names via CoreDNS (UDP and TCP 53).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns-egress
+  namespace: lab-capstone
+  labels:
+    app: capstone
+spec:
+  podSelector: {}
+  policyTypes: ["Egress"]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+---
+# 3. Frontend: reachable on 8080 from the ingress controller; may call the backend.
+#    The controller's namespace depends on what you installed in module 12,
+#    so this allows any namespace. Tighten it once you know, e.g.
+#      namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: ingress-nginx } }
+#    (A controller running with hostNetwork: true connects from the NODE's IP,
+#     which no pod/namespace selector matches - you'd need an ipBlock for the
+#     node addresses. Controllers using hostPort, like kind's usual setup, are fine.)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: frontend
+  namespace: lab-capstone
+  labels:
+    app: frontend
+spec:
+  podSelector:
+    matchLabels:
+      app: frontend
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    - from:
+        - namespaceSelector: {}
+      ports:
+        - { protocol: TCP, port: 8080 }
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: backend
+      ports:
+        - { protocol: TCP, port: 8080 }
+---
+# 4. Backend: reachable only from the frontend.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend
+  namespace: lab-capstone
+  labels:
+    app: backend
+spec:
+  podSelector:
+    matchLabels:
+      app: backend
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: frontend
+      ports:
+        - { protocol: TCP, port: 8080 }
+---
+# 5. Database clients (backend, seed Job, backup CronJob - label
+#    db-access=true) may open connections to the database ...
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: db-clients-egress
+  namespace: lab-capstone
+  labels:
+    app: db
+spec:
+  podSelector:
+    matchLabels:
+      db-access: "true"
+  policyTypes: ["Egress"]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: db
+      ports:
+        - { protocol: TCP, port: 5432 }
+---
+# 6. ... and the database accepts connections only from them.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: db
+  namespace: lab-capstone
+  labels:
+    app: db
+spec:
+  podSelector:
+    matchLabels:
+      app: db
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              db-access: "true"
+      ports:
+        - { protocol: TCP, port: 5432 }

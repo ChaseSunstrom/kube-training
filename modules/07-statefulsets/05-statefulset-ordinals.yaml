@@ -9,9 +9,10 @@
 #   whenScaled: Delete  -> scaling 3 -> 1 deletes data-shard-2 and data-shard-3
 #                          once those pods are gone.
 #   whenDeleted: Delete -> deleting the StatefulSet deletes all its PVCs.
-# The controller implements this with ownerReferences on the PVCs (to the
-# Pod for whenScaled, to the StatefulSet for whenDeleted) and lets the
-# garbage collector do the deleting.
+# The controller implements this with ownerReferences and lets the garbage
+# collector do the deleting: with whenDeleted: Delete the StatefulSet owns
+# every PVC; with whenScaled: Delete, a pod that is removed by a scale-down
+# becomes the owner of its PVC just before it is deleted.
 #
 # Only use Delete when the data is disposable or replicated elsewhere!
 apiVersion: v1

@@ -1,0 +1,69 @@
+# Solution to exercise 6 - Indexed Job pods that can find each other by name.
+#
+# Indexed Job pods get hostname <job-name>-<index>. Add a headless Service
+# and set spec.subdomain to its name, and each pod becomes resolvable as
+#   <job-name>-<index>.<service>.<namespace>.svc.cluster.local
+# - the same mechanism StatefulSets use. MPI, PyTorch distributed and similar
+# frameworks rely on this to wire up their workers.
+#
+# Index 0 serves a file over HTTP; indexes 1 and 2 fetch it from
+# mesh-0.mesh, then everyone exits.
+#
+#   kubectl apply -f solutions/06-indexed-with-dns.yaml
+#   kubectl wait -n lab-jobs --for=condition=complete job/mesh --timeout=120s
+#   kubectl logs -n lab-jobs -l app=mesh --prefix
+apiVersion: v1
+kind: Service
+metadata:
+  name: mesh
+  namespace: lab-jobs
+  labels:
+    app: mesh
+spec:
+  clusterIP: None
+  # Pods must be resolvable before they are Ready (they never get a
+  # readiness probe here), so publish them right away.
+  publishNotReadyAddresses: true
+  selector:
+    app: mesh
+  ports:
+    - name: http
+      port: 8080
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mesh
+  namespace: lab-jobs
+  labels:
+    app: mesh
+spec:
+  completionMode: Indexed
+  completions: 3
+  parallelism: 3
+  backoffLimit: 6
+  template:
+    metadata:
+      labels:
+        app: mesh
+    spec:
+      subdomain: mesh                # = the headless Service name
+      restartPolicy: Never
+      containers:
+        - name: main
+          image: busybox:1.37
+          command:
+            - sh
+            - -c
+            - |
+              if [ "$JOB_COMPLETION_INDEX" = 0 ]; then
+                mkdir -p /www && echo "hello from $(hostname -f)" > /www/msg
+                httpd -f -p 8080 -h /www & pid=$!
+                sleep 30; kill $pid; echo "leader done"; exit 0
+              fi
+              until wget -qO- http://mesh-0.mesh:8080/msg; do
+                echo "waiting for mesh-0.mesh ..."; sleep 2
+              done
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 100m, memory: 32Mi }

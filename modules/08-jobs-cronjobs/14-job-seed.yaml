@@ -1,0 +1,54 @@
+# 14 - A one-time "migration / seed" Job.
+#
+# Real apps often need a step that must finish BEFORE the new version
+# starts: run database migrations, create a schema, load reference data.
+# A Job is the natural Kubernetes object for that: it runs to completion,
+# retries on failure, and its status says clearly whether it worked.
+#
+# Two properties make such a Job safe:
+#   1. It WAITS for its dependency (the until-loop below) instead of failing
+#      and burning retries while the database is still starting.
+#   2. It is IDEMPOTENT: running it twice must not break anything. Here
+#      "SET ... NX" only writes keys that don't exist yet; real migration
+#      tools (Flyway, Liquibase, Alembic, golang-migrate ...) record which
+#      migrations have been applied.
+#
+# The pipeline then gates the app on it:
+#   kubectl apply -f 14-job-seed.yaml
+#   kubectl wait -n lab-jobs --for=condition=complete job/seed-redis --timeout=120s
+#   ... deploy the app ...
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: seed-redis
+  namespace: lab-jobs
+  labels:
+    app: seed-redis
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 300
+  ttlSecondsAfterFinished: 3600     # keep it an hour for inspection
+  template:
+    metadata:
+      labels:
+        app: seed-redis
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: seed
+          image: redis:7.4-alpine      # for redis-cli
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              until redis-cli -h redis ping | grep -q PONG; do
+                echo "waiting for redis..."; sleep 2
+              done
+              redis-cli -h redis SET schema_version 3 NX
+              redis-cli -h redis SET config:currency EUR NX
+              redis-cli -h redis SET config:max_cart_items 50 NX
+              echo "seed done, schema_version=$(redis-cli -h redis GET schema_version)"
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 100m, memory: 32Mi }

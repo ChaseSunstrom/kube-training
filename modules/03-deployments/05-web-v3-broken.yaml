@@ -1,0 +1,71 @@
+# 05 - `web` version 3: a BROKEN release (the image tag does not exist).
+#
+# What you will see:
+#   * the new ReplicaSet's pod sits in ErrImagePull / ImagePullBackOff;
+#   * because maxUnavailable is 0, all 4 v2 pods keep serving - no outage;
+#   * after progressDeadlineSeconds (60s) the Deployment reports
+#     Progressing=False / ProgressDeadlineExceeded and
+#     `kubectl rollout status` exits with an error;
+#   * nothing rolls back automatically - you run `kubectl rollout undo`.
+#
+#   kubectl apply -f modules/03-deployments/05-web-v3-broken.yaml
+#   kubectl rollout status deployment/web -n lab-deployments   # fails after ~60s
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: lab-deployments
+  labels:
+    app: web
+  annotations:
+    # Shown in the CHANGE-CAUSE column of `kubectl rollout history`.
+    # Update it together with every change you roll out.
+    kubernetes.io/change-cause: "v3: broken image tag"
+spec:
+  replicas: 4
+  # The selector is IMMUTABLE after creation and must match the template labels.
+  selector:
+    matchLabels:
+      app: web
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # During a rollout, at most replicas + maxSurge pods exist (here 5)...
+      maxSurge: 1
+      # ...and at least replicas - maxUnavailable are available (here 4).
+      # 0 = never go below full capacity: the safest setting for a web app,
+      # and the reason a broken image can't take the app down (step 6).
+      maxUnavailable: 0
+  # A new pod must stay Ready for 5s before it counts as "available" -
+  # catches pods that crash right after their first successful probe.
+  minReadySeconds: 5
+  # If the rollout makes no progress for 60s, mark it failed
+  # (condition Progressing=False, reason ProgressDeadlineExceeded).
+  # It does NOT roll back by itself. Default is 600s.
+  progressDeadlineSeconds: 60
+  # Keep 5 old ReplicaSets for `kubectl rollout undo` (default 10).
+  revisionHistoryLimit: 5
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+        - name: whoami
+          image: traefik/whoami:v9.99-does-not-exist   # <- typo in the tag
+          env:
+            - name: WHOAMI_NAME
+              value: "v3"
+          ports:
+            - name: http
+              containerPort: 80
+          # Readiness gates the rollout: a new pod only replaces an old one
+          # once it is Ready (+ minReadySeconds).
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 2
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 100m, memory: 32Mi }

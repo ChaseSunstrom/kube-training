@@ -1,0 +1,78 @@
+# Solution to exercise 4 - a single Redis instance whose data survives pod
+# deletion.
+#
+# Redis only writes to disk if you ask it to: --appendonly yes logs every
+# write to /data/appendonly.aof (the redis image's working dir is /data).
+# Without that the PVC would be mounted but empty after a restart.
+#
+#   kubectl apply -f solutions/04-redis-statefulset.yaml
+#   kubectl rollout status sts/redis -n lab-statefulsets
+#   kubectl exec -n lab-statefulsets redis-0 -- redis-cli set course kube-training
+#   kubectl delete pod redis-0 -n lab-statefulsets
+#   kubectl wait -n lab-statefulsets --for=condition=Ready pod/redis-0
+#   kubectl exec -n lab-statefulsets redis-0 -- redis-cli get course   # kube-training
+#
+# This is ONE instance. Turning it into a replicated, failover-capable Redis
+# needs configuration that depends on which pod is primary - exactly the kind
+# of logic an operator provides (see the README).
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: lab-statefulsets
+  labels:
+    app: redis
+spec:
+  clusterIP: None
+  selector:
+    app: redis
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: redis
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  namespace: lab-statefulsets
+  labels:
+    app: redis
+spec:
+  serviceName: redis
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7.4-alpine
+          args: ["--appendonly", "yes"]
+          ports:
+            - name: redis
+              containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            periodSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            requests: { cpu: 20m, memory: 32Mi }
+            limits:   { cpu: 200m, memory: 128Mi }
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          app: redis
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 100Mi

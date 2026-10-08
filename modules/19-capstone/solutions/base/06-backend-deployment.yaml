@@ -1,0 +1,97 @@
+# The backend "API" (files/api.sh served by busybox nc - see that file).
+#
+# Production-shaped bits to look for:
+#   * 2+ replicas spread over zones (topologySpreadConstraints)
+#   * readiness = "can I serve?" checks only this process. It deliberately does
+#     NOT check the database: if the DB is down, every backend would turn
+#     unready at once and the frontend would lose ALL endpoints - a cascading
+#     outage. DB status is reported by /api/health instead.
+#   * liveness on a cheap endpoint with a generous threshold
+#   * requests + limits, non-root, read-only root FS, no SA token
+#   * config (the script) from a generated, hashed ConfigMap: editing
+#     files/api.sh rolls the Deployment automatically (module 17)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: lab-capstone
+  labels:
+    app: backend
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+        db-access: "true"           # allowed to reach the database (NetworkPolicy)
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70
+        runAsGroup: 70
+        seccompProfile:
+          type: RuntimeDefault
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: training/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: backend
+      containers:
+        - name: api
+          image: postgres:16-alpine     # used only for its psql client + busybox nc
+          command: ["nc", "-lk", "-p", "8080", "-e", "/app/api.sh"]
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: PGHOST
+              value: db
+            - name: PGCONNECT_TIMEOUT
+              value: "3"
+            - name: PGUSER
+              valueFrom: { secretKeyRef: { name: db-credentials, key: POSTGRES_USER } }
+            - name: PGPASSWORD
+              valueFrom: { secretKeyRef: { name: db-credentials, key: POSTGRES_PASSWORD } }
+            - name: PGDATABASE
+              valueFrom: { secretKeyRef: { name: db-credentials, key: POSTGRES_DB } }
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket: { port: http }
+            periodSeconds: 10
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: app
+              mountPath: /app
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests: { cpu: 50m, memory: 32Mi }
+            limits:   { cpu: 500m, memory: 128Mi }
+      volumes:
+        - name: app
+          configMap:
+            name: backend-app
+            defaultMode: 0555          # the script must be executable
+        - name: tmp
+          emptyDir:
+            sizeLimit: 16Mi

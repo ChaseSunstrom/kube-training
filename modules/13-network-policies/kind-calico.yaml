@@ -1,0 +1,29 @@
+# OPTIONAL - only if NetworkPolicies are NOT enforced on your cluster
+# (lab step 1 shows how to check).
+#
+# A second kind cluster for this module, with kind's own CNI (kindnet)
+# disabled and Calico installed instead. Calico has enforced NetworkPolicy
+# for years and behaves exactly like any other conformant implementation.
+#
+#   kind create cluster --config modules/13-network-policies/kind-calico.yaml
+#   kubectl --context kind-kube-training-calico apply -f \
+#     https://raw.githubusercontent.com/projectcalico/calico/v3.32.2/manifests/calico.yaml
+#   kubectl --context kind-kube-training-calico -n kube-system rollout status ds/calico-node --timeout=300s
+#
+# Nodes stay NotReady until Calico is running (no CNI = no pod network).
+# No host port mappings, so it can run next to the main training cluster.
+# Delete it afterwards: kind delete cluster --name kube-training-calico
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: kube-training-calico
+networking:
+  disableDefaultCNI: true          # don't install kindnet
+  podSubnet: 192.168.0.0/16        # Calico's default IP pool in calico.yaml
+nodes:
+  - role: control-plane
+  - role: worker
+    labels:
+      training/zone: zone-a
+  - role: worker
+    labels:
+      training/zone: zone-b

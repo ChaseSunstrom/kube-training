@@ -166,10 +166,10 @@ kubectl get clusterrolebinding kubeadm:cluster-admins -o wide
 ATTRIBUTE                                           VALUE
 Username                                            kubernetes-admin
 Groups                                              [kubeadm:cluster-admins system:authenticated]
-Extra: authentication.kubernetes.io/credential-id   [X509SHA256=b6733bde08c8...]
+Extra: authentication.kubernetes.io/credential-id   [X509SHA256=38e33f95fb34...]
 
 NAME                     ROLE                        AGE   USERS   GROUPS                   SERVICEACCOUNTS
-kubeadm:cluster-admins   ClusterRole/cluster-admin   36m           kubeadm:cluster-admins
+kubeadm:cluster-admins   ClusterRole/cluster-admin   19m           kubeadm:cluster-admins
 ```
 
 You authenticated with an X.509 client certificate (from your kubeconfig); the
@@ -184,17 +184,17 @@ kubectl -n lab-rbac get serviceaccounts
 ```
 
 ```
-NAME            SECRETS   AGE
-config-reader   0         0s
-default         0         0s
-no-api-access   0         0s
-node-watcher    0         0s
-pod-viewer      0         0s
-viewer          0         0s
+NAME            AGE
+config-reader   0s
+default         0s
+no-api-access   0s
+node-watcher    0s
+pod-viewer      0s
+viewer          0s
 ```
 
 `default` appeared by itself (the ServiceAccount controller creates it in every
-namespace). `SECRETS 0`: no long-lived token Secrets any more.
+namespace). No token Secrets were created for any of them.
 
 ```bash
 kubectl apply -f modules/11-rbac/02-token-pods.yaml
@@ -210,7 +210,7 @@ namespace
 token
 ls: /var/run/secrets/kubernetes.io/serviceaccount: No such file or directory
 command terminated with exit code 1
-{"name":"kube-api-access-xbmg8","projected":{"defaultMode":420,"sources":[{"serviceAccountToken":
+{"name":"kube-api-access-78zrb","projected":{"defaultMode":420,"sources":[{"serviceAccountToken":
 {"expirationSeconds":3607,"path":"token"}},{"configMap":{"items":[{"key":"ca.crt","path":"ca.crt"}],
 "name":"kube-root-ca.crt"}},{"downwardAPI":{"items":[{"fieldRef":{"apiVersion":"v1",
 "fieldPath":"metadata.namespace"},"path":"namespace"}]}}]}}
@@ -227,14 +227,14 @@ kubectl -n lab-rbac exec token-mounted -- cat /var/run/secrets/kubernetes.io/ser
 ```
 
 ```json
-{"aud":["https://kubernetes.default.svc.cluster.local"],"exp":1822991428,"iat":1791455428,
- "iss":"https://kubernetes.default.svc.cluster.local","jti":"961d125d-...",
+{"aud":["https://kubernetes.default.svc.cluster.local"],"exp":1822992904,"iat":1791456904,
+ "iss":"https://kubernetes.default.svc.cluster.local","jti":"46f15b07-...",
  "kubernetes.io":{"namespace":"lab-rbac",
-   "node":{"name":"kube-training-worker2","uid":"23ce5254-..."},
-   "pod":{"name":"token-mounted","uid":"3672b642-..."},
-   "serviceaccount":{"name":"default","uid":"1319a672-..."},
-   "warnafter":1791459035},
- "nbf":1791455428,"sub":"system:serviceaccount:lab-rbac:default"}
+   "node":{"name":"kube-training-worker","uid":"e5a20e6f-..."},
+   "pod":{"name":"token-mounted","uid":"f9621301-..."},
+   "serviceaccount":{"name":"default","uid":"7ee753ac-..."},
+   "warnafter":1791460511},
+ "nbf":1791456904,"sub":"system:serviceaccount:lab-rbac:default"}
 ```
 
 * `sub` – the username RBAC will see.
@@ -254,7 +254,7 @@ kubectl -n lab-rbac logs kubectl-client
 
 ```
 NAME             READY   STATUS   RESTARTS   AGE
-kubectl-client   0/1     Error    0          5s
+kubectl-client   0/1     Error    0          3s
 
 Error from server (Forbidden): pods is forbidden: User "system:serviceaccount:lab-rbac:pod-viewer"
 cannot list resource "pods" in API group "" in the namespace "lab-rbac"
@@ -276,13 +276,13 @@ kubectl -n lab-rbac logs kubectl-client
 ```
 role.rbac.authorization.k8s.io/pod-reader created
 rolebinding.rbac.authorization.k8s.io/pod-viewer-reads-pods created
-pod "kubectl-client" deleted
+pod "kubectl-client" deleted from lab-rbac namespace
 pod/kubectl-client replaced
 
 NAME             READY   STATUS    RESTARTS   AGE
 kubectl-client   1/1     Running   0          1s
-no-token         1/1     Running   0          24s
-token-mounted    1/1     Running   0          24s
+no-token         1/1     Running   0          8s
+token-mounted    1/1     Running   0          8s
 ```
 
 RBAC changes take effect immediately – no restart of anything needed.
@@ -298,8 +298,8 @@ echo "$TOKEN" | jwt
 ```
 
 ```json
-{"aud":["https://kubernetes.default.svc.cluster.local"],"exp":1791456111,"iat":1791455511, ...
- "kubernetes.io":{"namespace":"lab-rbac","serviceaccount":{"name":"pod-viewer","uid":"df33506c-..."}},
+{"aud":["https://kubernetes.default.svc.cluster.local"],"exp":1791457514,"iat":1791456914, ...
+ "kubernetes.io":{"namespace":"lab-rbac","serviceaccount":{"name":"pod-viewer","uid":"1b215959-..."}},
  "sub":"system:serviceaccount:lab-rbac:pod-viewer"}
 ```
 
@@ -322,12 +322,12 @@ sa --token="$TOKEN" -n lab-rbac get secrets
 ```
 ATTRIBUTE                                           VALUE
 Username                                            system:serviceaccount:lab-rbac:pod-viewer
-UID                                                 df33506c-484c-4815-a1fa-be94d2edad2b
+UID                                                 1b215959-e34e-4efa-8aab-750d386984da
 Groups                                              [system:serviceaccounts system:serviceaccounts:lab-rbac system:authenticated]
-Extra: authentication.kubernetes.io/credential-id   [JTI=d6f69128-af71-4dab-98eb-49d1b6e62794]
+Extra: authentication.kubernetes.io/credential-id   [JTI=0979799b-16a4-487e-974f-da931574f1da]
 
 NAME             READY   STATUS      RESTARTS   AGE
-kubectl-client   0/1     Completed   0          62s
+kubectl-client   0/1     Completed   0          3s
 ...
 Error from server (Forbidden): secrets is forbidden: User "system:serviceaccount:lab-rbac:pod-viewer" cannot list resource "secrets" ...
 ```
@@ -339,7 +339,7 @@ Now a token **bound to a pod**. The pod must run as the same ServiceAccount
 kubectl -n lab-rbac create token pod-viewer --bound-object-kind=Pod --bound-object-name=token-mounted
 # error: failed to create token: cannot bind token for serviceaccount "pod-viewer" to pod running with different serviceaccount name.
 
-kubectl apply -f modules/11-rbac/03-kubectl-pod.yaml          # make sure kubectl-client exists
+kubectl -n lab-rbac get pod kubectl-client                    # from step 3, runs as pod-viewer
 BOUND=$(kubectl -n lab-rbac create token pod-viewer --bound-object-kind=Pod --bound-object-name=kubectl-client --duration=10m)
 sa --token="$BOUND" -n lab-rbac get pods -o name               # works
 kubectl -n lab-rbac delete pod kubectl-client
@@ -350,7 +350,7 @@ sa --token="$BOUND" -n lab-rbac get pods -o name               # repeat for ~10 
 pod/kubectl-client
 pod/no-token
 pod/token-mounted
-pod "kubectl-client" deleted
+pod "kubectl-client" deleted from lab-rbac namespace
 pod/no-token                     <- still accepted for a few seconds (auth cache)
 ...
 error: You must be logged in to the server (Unauthorized)
@@ -458,8 +458,8 @@ kubectl -n lab-rbac get configmaps,secrets --as=system:serviceaccount:lab-rbac:v
 
 ```
 NAME               DATA   AGE
-app-config         1      38s
-kube-root-ca.crt   1      74s
+app-config         1      5s
+kube-root-ca.crt   1      37s
 Error from server (Forbidden): secrets is forbidden: User "system:serviceaccount:lab-rbac:viewer" cannot list resource "secrets" in API group "" in the namespace "lab-rbac"
 ```
 
@@ -475,16 +475,18 @@ selfsubjectreviews.authentication.k8s.io        []                  []          
 selfsubjectaccessreviews.authorization.k8s.io   []                  []               [create]
 selfsubjectrulesreviews.authorization.k8s.io    []                  []               [create]
 pods                                            []                  []               [get list watch]
+clustertrustbundles.certificates.k8s.io         []                  []               [get list watch]
                                                 [/api/*]            []               [get]
                                                 [/version]          []               [get]
 ...
 ```
 
-The `self*reviews` and non-resource URLs (`/api`, `/healthz`, `/version`...)
-come from built-in ClusterRoles bound to `system:authenticated` /
+Only the `pods` line is ours. The `self*reviews`, `clustertrustbundles` and
+non-resource URLs (`/api`, `/healthz`, `/version`...) come from built-in
+ClusterRoles bound to the groups `system:authenticated` /
 `system:serviceaccounts` (`system:basic-user`, `system:discovery`,
-`system:public-info-viewer`, `system:service-account-issuer-discovery`).
-Everything else is ours.
+`system:public-info-viewer`, `system:service-account-issuer-discovery`,
+`system:cluster-trust-bundle-discovery`).
 
 ## Exercises
 

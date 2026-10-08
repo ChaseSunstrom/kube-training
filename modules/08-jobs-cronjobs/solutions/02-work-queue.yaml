@@ -1,0 +1,52 @@
+# Solution to exercise 2 - the "work queue" pattern.
+#
+# Fill the queue first (Redis from 13-redis.yaml must be running):
+#   kubectl exec -n lab-jobs deploy/redis -- redis-cli del queue
+#   kubectl exec -n lab-jobs deploy/redis -- redis-cli rpush queue $(seq -s ' ' 1 12)
+# then:
+#   kubectl apply -f solutions/02-work-queue.yaml
+#   kubectl wait -n lab-jobs --for=condition=complete job/queue-workers --timeout=120s
+#   kubectl logs -n lab-jobs -l app=queue-workers --prefix
+#
+# completions is NOT set and parallelism is 3: the Job starts 3 workers, and
+# each one pops items until the queue is empty and then exits 0. With no
+# completions, the Job is Complete once at least one pod has succeeded and
+# all pods have terminated - i.e. when the queue is drained. Workers decide
+# for themselves when there is no more work.
+#
+# Trade-off vs Indexed Jobs: dynamic load balancing (fast workers take more
+# items) but you need a queue service, and an item a worker popped right
+# before it crashed is lost - real systems use acknowledgements / leases
+# (e.g. RabbitMQ acks, Redis LMOVE to a processing list).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: queue-workers
+  namespace: lab-jobs
+  labels:
+    app: queue-workers
+spec:
+  parallelism: 3
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: queue-workers
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: worker
+          image: redis:7.4-alpine      # for redis-cli
+          command:
+            - sh
+            - -c
+            - |
+              while true; do
+                item=$(redis-cli -h redis LPOP queue)
+                if [ -z "$item" ]; then echo "$(hostname): queue empty, exiting"; exit 0; fi
+                echo "$(hostname): processing item $item"
+                sleep 1
+              done
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 100m, memory: 32Mi }

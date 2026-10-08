@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Capstone shop</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 2rem auto; padding: 0 1rem; }
+    li { margin: .25rem 0; }
+    .err { color: #b00020; }
+  </style>
+</head>
+<body>
+  <h1>Capstone shop</h1>
+  <p>frontend (nginx) &rarr; /api &rarr; backend &rarr; PostgreSQL</p>
+  <ul id="items"><li>loading...</li></ul>
+  <script>
+    fetch('/api/items')
+      .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(items => {
+        const ul = document.getElementById('items');
+        ul.innerHTML = '';
+        items.forEach(i => {
+          const li = document.createElement('li');
+          li.textContent = i.name + ' - ' + Number(i.price).toFixed(2) + ' EUR';
+          ul.appendChild(li);
+        });
+      })
+      .catch(e => {
+        document.getElementById('items').innerHTML = '<li class="err">API error: ' + e.message + '</li>';
+      });
+  </script>
+</body>
+</html>

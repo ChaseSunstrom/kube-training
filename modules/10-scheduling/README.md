@@ -177,9 +177,9 @@ class queue priority without the right to evict.
 ### Reading a FailedScheduling message
 
 ```
-0/3 nodes are available: 1 node(s) had untolerated taint {node-role.kubernetes.io/control-plane: },
-2 node(s) didn't match pod anti-affinity rules. preemption: 0/3 nodes are available:
-1 Preemption is not helpful for scheduling, 2 No preemption victims found for incoming pod.
+0/3 nodes are available: 1 node(s) had untolerated taint(s), 2 node(s) didn't match pod
+anti-affinity rules. preemption: 0/3 nodes are available: 1 Preemption is not helpful for
+scheduling, 2 No preemption victims found for incoming pod.
 ```
 
 * `0/3 nodes are available` – how many nodes passed **all** filters.
@@ -192,10 +192,15 @@ class queue priority without the right to evict.
   found"* = evicting could help in theory, but there are no lower-priority pods
   whose removal would make the pod fit.
 
+Where to find the message: `kubectl describe pod <name>` (Events at the
+bottom), `kubectl get events --field-selector reason=FailedScheduling`, or the
+pod's `PodScheduled` condition. Note that `kubectl describe pod -l <selector>`
+(several pods) hides events by default – add `--show-events=true`.
+
 | Phrase in the event | Look at |
 |---|---|
 | `didn't match Pod's node affinity/selector` | `nodeSelector`, node affinity vs `kubectl get nodes --show-labels` |
-| `had untolerated taint {k: v}` | `kubectl describe node` → Taints, pod `tolerations` |
+| `had untolerated taint(s)` | `kubectl describe node` → Taints, pod `tolerations` (the message doesn't name the taint – here it is the control-plane's) |
 | `didn't match pod affinity rules` / `pod anti-affinity rules` | which pods exist (`kubectl get pods -o wide -l ...`), `topologyKey` |
 | `didn't match pod topology spread constraints` | current distribution, `maxSkew`, `nodeTaintsPolicy` |
 | `Insufficient cpu` / `memory` / `<extended resource>` | requests vs `kubectl describe node` → Allocated resources |
@@ -237,10 +242,10 @@ kubectl get nodes -o custom-columns=NAME:.metadata.name,TAINTS:.spec.taints
 ```
 
 ```
-NAME                          STATUS   ROLES           AGE   VERSION   ZONE
-kube-training-control-plane   Ready    control-plane   10m   v1.33.1
-kube-training-worker          Ready    <none>          10m   v1.33.1   zone-a
-kube-training-worker2         Ready    <none>          10m   v1.33.1   zone-b
+NAME                          STATUS   ROLES           AGE     VERSION   ZONE
+kube-training-control-plane   Ready    control-plane   2m23s   v1.37.0
+kube-training-worker          Ready    <none>          2m12s   v1.37.0   zone-a
+kube-training-worker2         Ready    <none>          2m12s   v1.37.0   zone-b
 
 NAME                          TAINTS
 kube-training-control-plane   [map[effect:NoSchedule key:node-role.kubernetes.io/control-plane]]
@@ -260,10 +265,10 @@ kubectl -n lab-scheduling get pods -l app=zone-a-only -o wide
 ```
 
 ```
-NAME                          READY   STATUS    RESTARTS   AGE   IP            NODE                   ...
-zone-a-only-b479cdc69-gvvms   1/1     Running   0          3s    10.244.1.24   kube-training-worker   ...
-zone-a-only-b479cdc69-m85n4   1/1     Running   0          3s    10.244.1.25   kube-training-worker   ...
-zone-a-only-b479cdc69-mxth6   1/1     Running   0          3s    10.244.1.23   kube-training-worker   ...
+NAME                           READY   STATUS    RESTARTS   AGE   IP           NODE                   ...
+zone-a-only-7fb6d9b4cd-5wwcs   1/1     Running   0          2s    10.244.2.3   kube-training-worker   ...
+zone-a-only-7fb6d9b4cd-jd5r2   1/1     Running   0          2s    10.244.2.4   kube-training-worker   ...
+zone-a-only-7fb6d9b4cd-n4b4c   1/1     Running   0          2s    10.244.2.2   kube-training-worker   ...
 ```
 
 Now ask for a zone that doesn't exist and read the scheduler's answer:
@@ -277,20 +282,23 @@ kubectl -n lab-scheduling get events --field-selector reason=FailedScheduling
 
 ```
 NAME                           READY   STATUS    RESTARTS   AGE
-zone-a-only-6c9b64c8b7-gcgjv   0/1     Pending   0          0s
-zone-a-only-b479cdc69-djpbj    1/1     Running   0          11s
-...
-... FailedScheduling  pod/zone-a-only-6c9b64c8b7-gcgjv  0/3 nodes are available: 1 node(s) had untolerated
-taint {node-role.kubernetes.io/control-plane: }, 2 node(s) didn't match Pod's node affinity/selector.
-preemption: 0/3 nodes are available: 3 Preemption is not helpful for scheduling.
+zone-a-only-7fb6d9b4cd-5wwcs   1/1     Running   0          2m5s
+zone-a-only-7fb6d9b4cd-jd5r2   1/1     Running   0          2m5s
+zone-a-only-7fb6d9b4cd-n4b4c   1/1     Running   0          2m5s
+zone-a-only-857697d756-q8fpb   0/1     Pending   0          0s
+
+... FailedScheduling   pod/zone-a-only-857697d756-q8fpb   0/3 nodes are available: 1 node(s) had
+untolerated taint(s), 2 node(s) didn't match Pod's node affinity/selector. preemption: 0/3 nodes are
+available: 3 Preemption is not helpful for scheduling.
 ```
 
 The control-plane is ruled out by its taint, both workers by the selector.
 (The old pods keep running because the rolling update can't make progress –
-[module 03](../03-deployments/README.md).) Undo it:
+[module 03](../03-deployments/README.md).) Undo it the declarative way – re-apply
+the file:
 
 ```bash
-kubectl -n lab-scheduling rollout undo deployment zone-a-only
+kubectl apply -f modules/10-scheduling/01-nodeselector.yaml
 ```
 
 ### 3. Node affinity: required + preferred
@@ -302,10 +310,10 @@ kubectl -n lab-scheduling get pods -l app=prefers-zone-b -o wide
 
 ```
 NAME                              READY   STATUS    ...   NODE
-prefers-zone-b-56cfbb56c9-4kfmw   1/1     Running   ...   kube-training-worker2
-prefers-zone-b-56cfbb56c9-56wtg   1/1     Running   ...   kube-training-worker2
-prefers-zone-b-56cfbb56c9-l7hw5   1/1     Running   ...   kube-training-worker2
-prefers-zone-b-56cfbb56c9-qbpvs   1/1     Running   ...   kube-training-worker2
+prefers-zone-b-6df9f75b8d-h5l5s   1/1     Running   ...   kube-training-worker2
+prefers-zone-b-6df9f75b8d-mw5vp   1/1     Running   ...   kube-training-worker2
+prefers-zone-b-6df9f75b8d-r7l8m   1/1     Running   ...   kube-training-worker2
+prefers-zone-b-6df9f75b8d-zc2mn   1/1     Running   ...   kube-training-worker2
 ```
 
 The required term (`training/zone Exists`) leaves the two workers; the
@@ -324,18 +332,17 @@ kubectl -n lab-scheduling get events --field-selector reason=FailedScheduling
 ```
 
 ```
-web-7757f8cd9f-7r4cx   1/1     Running   0          2s    10.244.2.19   kube-training-worker2
-web-7757f8cd9f-97tsn   1/1     Running   0          2s    10.244.1.26   kube-training-worker
-web-7757f8cd9f-v5lkc   0/1     Pending   0          0s    <none>        <none>
+web-7f8f6f5cf8-9l6h6   1/1     Running   0          1s    10.244.1.6   kube-training-worker2
+web-7f8f6f5cf8-lzqjp   1/1     Running   0          1s    10.244.2.5   kube-training-worker
+web-7f8f6f5cf8-rl9sc   0/1     Pending   0          0s    <none>       <none>
 
-... FailedScheduling   pod/web-7757f8cd9f-v5lkc   0/3 nodes are available: 1 node(s) had untolerated
-taint {node-role.kubernetes.io/control-plane: }, 2 node(s) didn't match pod anti-affinity rules.
-preemption: 0/3 nodes are available: 1 Preemption is not helpful for scheduling, 2 No preemption
-victims found for incoming pod.
+... FailedScheduling   pod/web-7f8f6f5cf8-rl9sc   0/3 nodes are available: 1 node(s) had untolerated
+taint(s), 2 node(s) didn't match pod anti-affinity rules. preemption: 0/3 nodes are available:
+1 Preemption is not helpful for scheduling, 2 No preemption victims found for incoming pod.
 ```
 
-Decode it with the table in *Concepts*: 3 nodes, 1 rejected by the taint,
-2 by anti-affinity (each already runs a `web` pod), and preemption can't help
+Decode it with the table in *Concepts*: 3 nodes, 1 rejected by a taint (the
+control-plane's), 2 by anti-affinity (each already runs a `web` pod), and preemption can't help
 (the other web pods have the same priority). A required anti-affinity on
 hostname caps the replica count at the number of nodes. Scale back:
 
@@ -351,11 +358,11 @@ kubectl -n lab-scheduling get pods -l 'app in (web,cache)' -o wide
 ```
 
 ```
-NAME                    READY   STATUS    ...   NODE
-cache-85cb4956b-577nl   1/1     Running   ...   kube-training-worker2
-cache-85cb4956b-7q7ww   1/1     Running   ...   kube-training-worker
-web-7757f8cd9f-7r4cx    1/1     Running   ...   kube-training-worker2
-web-7757f8cd9f-97tsn    1/1     Running   ...   kube-training-worker
+NAME                     READY   STATUS    ...   NODE
+cache-7ccb85464f-chxtm   1/1     Running   ...   kube-training-worker
+cache-7ccb85464f-th4xj   1/1     Running   ...   kube-training-worker2
+web-7f8f6f5cf8-9l6h6     1/1     Running   ...   kube-training-worker2
+web-7f8f6f5cf8-lzqjp     1/1     Running   ...   kube-training-worker
 ```
 
 Affinity says "only where a `web` pod is", anti-affinity says "not where a
@@ -369,9 +376,9 @@ kubectl -n lab-scheduling get pods -l app=self-affine -o wide
 ```
 
 ```
-self-affine-6fc56f879d-9flmn   1/1     Running   0          3s    10.244.2.22   kube-training-worker2
-self-affine-6fc56f879d-hxsxt   1/1     Running   0          3s    10.244.2.23   kube-training-worker2
-self-affine-6fc56f879d-nvh74   1/1     Running   0          3s    10.244.2.21   kube-training-worker2
+self-affine-56ffbb88df-g77ws   1/1     Running   0          3s    10.244.2.7   kube-training-worker
+self-affine-56ffbb88df-mpgxk   1/1     Running   0          2s    10.244.2.8   kube-training-worker
+self-affine-56ffbb88df-wqxjp   1/1     Running   0          2s    10.244.2.9   kube-training-worker
 ```
 
 No `app=self-affine` pod existed, yet the first replica scheduled: its own
@@ -392,8 +399,8 @@ Events:
   Type     Reason            Age   From               Message
   ----     ------            ----  ----               -------
   Warning  FailedScheduling  0s    default-scheduler  0/3 nodes are available: 1 node(s) had untolerated
-  taint {node-role.kubernetes.io/control-plane: }, 2 node(s) didn't match pod affinity rules. preemption:
-  0/3 nodes are available: 3 Preemption is not helpful for scheduling.
+  taint(s), 2 node(s) didn't match pod affinity rules. preemption: 0/3 nodes are available: 3 Preemption
+  is not helpful for scheduling.
 ```
 
 Give it what it wants – a pod labelled `app=database` (quick imperative way):
@@ -405,8 +412,8 @@ kubectl -n lab-scheduling get pods -l 'app in (database,waits-for-db)' -o wide
 
 ```
 NAME           READY   STATUS    RESTARTS   AGE   IP            NODE
-database       1/1     Running   0          3s    10.244.2.24   kube-training-worker2
-waits-for-db   1/1     Running   0          3s    10.244.2.25   kube-training-worker2
+database       1/1     Running   0          2s    10.244.1.8   kube-training-worker2
+waits-for-db   1/1     Running   0          2s    10.244.1.9   kube-training-worker2
 ```
 
 Within a second the scheduler retried `waits-for-db` (a new pod is a "relevant
@@ -426,13 +433,13 @@ kubectl -n lab-scheduling get pods -l 'app in (regular,dedicated)' -o wide
 ```
 
 ```
-NAME                        READY   STATUS    ...   NODE
-dedicated-f76577948-4szn5   1/1     Running   ...   kube-training-worker2
-dedicated-f76577948-wnx7k   1/1     Running   ...   kube-training-worker2
-regular-69d5999b46-67xf6    1/1     Running   ...   kube-training-worker
-regular-69d5999b46-c8p89    1/1     Running   ...   kube-training-worker
-regular-69d5999b46-h75hr    1/1     Running   ...   kube-training-worker
-regular-69d5999b46-l6bq6    1/1     Running   ...   kube-training-worker
+NAME                         READY   STATUS    ...   NODE
+dedicated-7b9446865c-8rmr9   1/1     Running   ...   kube-training-worker2
+dedicated-7b9446865c-tnk6v   1/1     Running   ...   kube-training-worker2
+regular-6999f8d64c-6xg69     1/1     Running   ...   kube-training-worker
+regular-6999f8d64c-ctp4v     1/1     Running   ...   kube-training-worker
+regular-6999f8d64c-gt5x6     1/1     Running   ...   kube-training-worker
+regular-6999f8d64c-ww9mt     1/1     Running   ...   kube-training-worker
 ```
 
 `regular` can't use worker2; `dedicated` tolerates the taint and its node
@@ -491,13 +498,13 @@ kubectl taint nodes kube-training-worker2 lab-scheduling/maintenance=now:NoExecu
 
 ```
 NAME              READY   STATUS        RESTARTS   AGE
-evict-after-30s   1/1     Running       0          3s
-evict-now         1/1     Running       0          3s
-never-evicted     1/1     Running       0          3s
-evict-now         1/1     Terminating   0          4s      <- right away
-evict-now         0/1     Error         0          6s
-evict-after-30s   1/1     Terminating   0          33s     <- 30 s after the taint
-evict-after-30s   0/1     Error         0          33s
+evict-after-30s   1/1     Running       0          2s
+evict-now         1/1     Running       0          2s
+never-evicted     1/1     Running       0          2s
+evict-now         1/1     Terminating   0          2s      <- right away
+evict-now         0/1     Error         0          3s
+evict-after-30s   1/1     Terminating   0          32s     <- 30 s after the taint
+evict-after-30s   0/1     Error         0          32s
 ```
 
 (`Error` just means whoami exited with a non-zero code on SIGTERM.)
@@ -509,34 +516,44 @@ kubectl -n lab-scheduling get events --field-selector reason=TaintManagerEvictio
 ```
 
 ```
-NAME                              READY   STATUS    ...   NODE
-cache-85cb4956b-7d9p9             0/1     Pending   ...   <none>
-dedicated-f76577948-hgpjn         0/1     Pending   ...   <none>
-dedicated-f76577948-nm6wx         0/1     Pending   ...   <none>
-never-evicted                     1/1     Running   ...   kube-training-worker2
-prefers-zone-b-56cfbb56c9-4fmxl   1/1     Running   ...   kube-training-worker
-prefers-zone-b-56cfbb56c9-dzrm4   1/1     Running   ...   kube-training-worker
+NAME                              READY   STATUS              ...   NODE
+cache-7ccb85464f-chxtm            1/1     Running             ...   kube-training-worker
+cache-7ccb85464f-ghwrs            0/1     Pending             ...   <none>
+dedicated-7b9446865c-c7wfw        0/1     Pending             ...   <none>
+dedicated-7b9446865c-t6hs8        0/1     Pending             ...   <none>
+evict-after-30s                   1/1     Running             ...   kube-training-worker2
+never-evicted                     1/1     Running             ...   kube-training-worker2
+prefers-zone-b-6df9f75b8d-dfxfc   1/1     Running             ...   kube-training-worker
+prefers-zone-b-6df9f75b8d-hgpp8   0/1     ContainerCreating   ...   kube-training-worker
 ...
-self-affine-6fc56f879d-mpcdn      0/1     Pending   ...   <none>
-web-7757f8cd9f-cwqjx              0/1     Pending   ...   <none>
+web-7f8f6f5cf8-h2sx2              0/1     Pending             ...   <none>
+web-7f8f6f5cf8-lzqjp              1/1     Running             ...   kube-training-worker
 ...
-LAST SEEN   TYPE     REASON                 OBJECT                           MESSAGE
-31s         Normal   TaintManagerEviction   pod/cache-85cb4956b-577nl        Marking for deletion Pod lab-scheduling/cache-85cb4956b-577nl
-31s         Normal   TaintManagerEviction   pod/dedicated-f76577948-4szn5    Marking for deletion Pod lab-scheduling/dedicated-f76577948-4szn5
+LAST SEEN   TYPE     REASON                 OBJECT                         MESSAGE
+32s         Normal   TaintManagerEviction   pod/cache-7ccb85464f-th4xj     Marking for deletion Pod lab-scheduling/cache-7ccb85464f-th4xj
+32s         Normal   TaintManagerEviction   pod/database                   Marking for deletion Pod lab-scheduling/database
+32s         Normal   TaintManagerEviction   pod/dedicated-7b9446865c-8rmr9 Marking for deletion Pod lab-scheduling/dedicated-7b9446865c-8rmr9
+...
+2s          Normal   TaintManagerEviction   pod/evict-after-30s            Marking for deletion Pod lab-scheduling/evict-after-30s
+32s         Normal   TaintManagerEviction   pod/evict-now                  Marking for deletion Pod lab-scheduling/evict-now
 ...
 ```
 
 Everything from the earlier steps that ran on worker2 was evicted too, and
 each Deployment immediately created a replacement:
 
-* `prefers-zone-b` only *prefers* zone-b → replacements went to worker.
-* `web` (one per node) and `cache` (next to a web, one per node) can't fit on
-  worker alone → Pending.
+* `prefers-zone-b` only *prefers* zone-b → the replacements went to worker.
+* `web` (one per node) and `cache` (next to a web, one per node) can't fit a
+  second replica on worker → Pending.
 * `dedicated` requires zone-b → Pending.
-* `self-affine`: the replacements were created while the old replicas were
-  still terminating on worker2, so their affinity pointed at worker2 → Pending.
-  A pod marked unschedulable is only retried when a relevant cluster event
-  happens (or after at most 5 minutes) – here that event is the taint removal.
+* Bare pods (`database`, `waits-for-db`) are simply gone – nothing recreates
+  them. That's why you never run important things as bare pods.
+* If your `self-affine` group lives on worker2, it was evicted as well, and the
+  replacements may sit in Pending for a while: they were created while the old
+  replicas were still terminating on worker2, so their affinity pointed at
+  worker2. A pod marked unschedulable is only retried when a relevant cluster
+  event happens (or after at most 5 minutes) – here that event is the taint
+  removal. (In the run shown here the group lived on worker and was untouched.)
 
 Remove the taint and everything comes back:
 
@@ -560,26 +577,27 @@ kubectl -n lab-scheduling get pods -l 'app in (spread-zones,spread-nodes-strict)
 
 ```
 NAME                                   READY   STATUS    ...   NODE
-spread-nodes-strict-7f98479668-fwjss   1/1     Running   ...   kube-training-worker
-spread-nodes-strict-7f98479668-px48c   0/1     Pending   ...   <none>
-spread-nodes-strict-7f98479668-rwg5z   1/1     Running   ...   kube-training-worker2
-spread-nodes-strict-7f98479668-tsvks   0/1     Pending   ...   <none>
-spread-zones-7988d77bc9-hvcck          1/1     Running   ...   kube-training-worker
-spread-zones-7988d77bc9-m8mt6          1/1     Running   ...   kube-training-worker2
-spread-zones-7988d77bc9-s88jp          1/1     Running   ...   kube-training-worker2
-spread-zones-7988d77bc9-stvc8          1/1     Running   ...   kube-training-worker
+spread-nodes-strict-6dd8f8f95-7l4q6    0/1     Pending   ...   <none>
+spread-nodes-strict-6dd8f8f95-fv7sf    1/1     Running   ...   kube-training-worker2
+spread-nodes-strict-6dd8f8f95-jks78    0/1     Pending   ...   <none>
+spread-nodes-strict-6dd8f8f95-ljx9m    1/1     Running   ...   kube-training-worker
+spread-zones-5cdc797dcd-6t5zz          1/1     Running   ...   kube-training-worker2
+spread-zones-5cdc797dcd-6w7tz          1/1     Running   ...   kube-training-worker
+spread-zones-5cdc797dcd-cwpl2          1/1     Running   ...   kube-training-worker2
+spread-zones-5cdc797dcd-sb4xk          1/1     Running   ...   kube-training-worker
 ```
 
 `spread-zones` is a perfect 2 + 2. But why are two `spread-nodes-strict` pods
 Pending when both workers obviously have room?
 
 ```bash
-kubectl -n lab-scheduling describe pod -l app=spread-nodes-strict | grep FailedScheduling
+kubectl -n lab-scheduling get events --field-selector reason=FailedScheduling | grep spread-nodes-strict
 ```
 
 ```
-Warning  FailedScheduling  3s  default-scheduler  0/3 nodes are available: 1 node(s) had untolerated
-taint {node-role.kubernetes.io/control-plane: }, 2 node(s) didn't match pod topology spread constraints. ...
+... FailedScheduling   pod/spread-nodes-strict-6dd8f8f95-7l4q6   0/3 nodes are available: 1 node(s) had
+untolerated taint(s), 2 node(s) didn't match pod topology spread constraints. preemption: 0/3 nodes are
+available: 1 Preemption is not helpful for scheduling, 2 No preemption victims found for incoming pod.
 ```
 
 The control-plane also has a `kubernetes.io/hostname` label, so it is a domain
@@ -595,10 +613,10 @@ kubectl -n lab-scheduling get pods -l app=spread-nodes-strict -o wide
 ```
 
 ```
-spread-nodes-strict-668454b497-8dls7   1/1     Running   ...   kube-training-worker2
-spread-nodes-strict-668454b497-hzrcl   1/1     Running   ...   kube-training-worker
-spread-nodes-strict-668454b497-k7jrj   1/1     Running   ...   kube-training-worker2
-spread-nodes-strict-668454b497-t5vs9   1/1     Running   ...   kube-training-worker
+spread-nodes-strict-6448f67688-ftp22   1/1     Running   ...   kube-training-worker2
+spread-nodes-strict-6448f67688-lvvrk   1/1     Running   ...   kube-training-worker2
+spread-nodes-strict-6448f67688-qtvz5   1/1     Running   ...   kube-training-worker
+spread-nodes-strict-6448f67688-z5b8z   1/1     Running   ...   kube-training-worker
 ```
 
 2 + 2 – and thanks to `matchLabelKeys: [pod-template-hash]` the rollout
@@ -625,11 +643,11 @@ kubectl get node kube-training-worker -o jsonpath='{.status.allocatable.training
 ```
 
 ```
-NAME                      VALUE        GLOBAL-DEFAULT   AGE   PREEMPTIONPOLICY
-lab-high                  100000       false            0s    PreemptLowerPriority
-lab-low                   1000         false            0s    PreemptLowerPriority
-system-cluster-critical   2000000000   false            11m   PreemptLowerPriority
-system-node-critical      2000001000   false            11m   PreemptLowerPriority
+NAME                      VALUE        GLOBAL-DEFAULT   AGE     PREEMPTIONPOLICY
+lab-high                  100000       false            0s      PreemptLowerPriority
+lab-low                   1000         false            0s      PreemptLowerPriority
+system-cluster-critical   2000000000   false            3m26s   PreemptLowerPriority
+system-node-critical      2000001000   false            3m26s   PreemptLowerPriority
 node/kube-training-worker patched
 2
 ```
@@ -647,26 +665,30 @@ kubectl -n lab-scheduling get events --field-selector reason=Preempted
 ```
 NAME                        READY   STATUS    ...   NODE
 high-prio                   1/1     Running   ...   kube-training-worker
-low-prio-59f9965878-4g6t8   0/1     Pending   ...   <none>
-low-prio-59f9965878-s7dgd   1/1     Running   ...   kube-training-worker
+low-prio-7966d7b99f-dncnq   0/1     Pending   ...   <none>
+low-prio-7966d7b99f-nfmp8   1/1     Running   ...   kube-training-worker
 
 LAST SEEN   TYPE     REASON      OBJECT                          MESSAGE
-5s          Normal   Preempted   pod/low-prio-59f9965878-zd6jn   Preempted by pod 6e8def06-... on node kube-training-worker
+3s          Normal   Preempted   pod/low-prio-7966d7b99f-pv7sw   Preempted by pod 54b4b7ae-... on node kube-training-worker
 ```
 
 One `low-prio` pod was preempted; its Deployment created a replacement that now
 waits:
 
 ```bash
-kubectl -n lab-scheduling describe pod -l app=low-prio | grep FailedScheduling | tail -1
+kubectl -n lab-scheduling get events --field-selector reason=FailedScheduling | grep low-prio | tail -1
 ```
 
 ```
-Warning  FailedScheduling  3s (x3 over 5s)  default-scheduler  0/3 nodes are available: 1 node(s) had
-untolerated taint {node-role.kubernetes.io/control-plane: }, 2 Insufficient training.example.com/widget.
-preemption: 0/3 nodes are available: 1 Preemption is not helpful for scheduling, 2 Insufficient
-training.example.com/widget.
+... FailedScheduling   pod/low-prio-7966d7b99f-dncnq   0/3 nodes are available: 1 node(s) had untolerated
+taint(s), 2 Insufficient training.example.com/widget. preemption: 0/3 nodes are available: 1 Insufficient
+training.example.com/widget, 2 Preemption is not helpful for scheduling.
 ```
+
+Read the preemption part per node: on kube-training-worker the widgets are held
+by pods of **equal** (`lab-low`) or **higher** (`lab-high`) priority, so there
+are no victims and the reason stays "Insufficient"; worker2 has no widgets at
+all and the control-plane is tainted, so evicting pods there can't help.
 
 Now look at who else lives on that node:
 
@@ -728,14 +750,14 @@ kubectl -n lab-scheduling describe pod manual | sed -n '/^Events/,$p'
 
 ```
 NAME     READY   STATUS    RESTARTS   AGE   IP           NODE
-manual   1/1     Running   0          3s    10.244.0.5   kube-training-control-plane
+manual   1/1     Running   0          2s    10.244.0.5   kube-training-control-plane
 
 Events:
   Type    Reason   Age   From     Message
   ----    ------   ----  ----     -------
-  Normal  Pulled   2s    kubelet  Container image "traefik/whoami:v1.10" already present on machine
-  Normal  Created  2s    kubelet  Created container: app
-  Normal  Started  1s    kubelet  Started container app
+  Normal  Pulled   1s    kubelet  spec.containers{app}: Container image "traefik/whoami:v1.10" already present on machine and can be accessed by the pod
+  Normal  Created  1s    kubelet  spec.containers{app}: Container created
+  Normal  Started  0s    kubelet  spec.containers{app}: Container started
 ```
 
 It runs on the **tainted control-plane** without a toleration, and there is no

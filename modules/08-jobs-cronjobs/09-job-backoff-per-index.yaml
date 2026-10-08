@@ -1,0 +1,49 @@
+# 09 - backoffLimitPerIndex: retries counted per index, not per Job.
+#
+# With a plain backoffLimit, one consistently failing index can use up the
+# retry budget and fail the whole Job while the other indexes were fine.
+# With backoffLimitPerIndex each index gets its own budget:
+#
+#   backoffLimitPerIndex: 1   each index may fail once and be retried once
+#   maxFailedIndexes: 2       if MORE than 2 indexes fail, stop everything
+#
+# Here index 2 always fails. Indexes 0, 1 and 3 succeed; index 2 fails twice
+# (1 try + 1 retry) and is given up. Once all indexes are finished the Job is
+# marked Failed with reason FailedIndexes, and the status tells you exactly
+# which pieces to re-run:
+#   status.completedIndexes: "0,1,3"
+#   status.failedIndexes:    "2"
+# Requires completionMode: Indexed and restartPolicy: Never.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: per-index
+  namespace: lab-jobs
+  labels:
+    app: per-index
+spec:
+  completionMode: Indexed
+  completions: 4
+  parallelism: 4
+  backoffLimitPerIndex: 1
+  maxFailedIndexes: 2
+  template:
+    metadata:
+      labels:
+        app: per-index
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: worker
+          image: busybox:1.37
+          command:
+            - sh
+            - -c
+            - |
+              if [ "$JOB_COMPLETION_INDEX" = 2 ]; then
+                echo "index 2: corrupt input"; exit 1
+              fi
+              echo "index $JOB_COMPLETION_INDEX: ok"
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 100m, memory: 32Mi }

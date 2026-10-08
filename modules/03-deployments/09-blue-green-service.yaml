@@ -1,0 +1,24 @@
+# 09 - The blue/green switch: a Service that selects ONE color.
+#
+#   kubectl apply -f modules/03-deployments/09-blue-green-service.yaml
+#   kubectl exec -n lab-deployments client -- curl -s http://shop | grep Name   # blue
+#   # go live with green (a merge patch only changes the `color` key):
+#   kubectl patch service shop -n lab-deployments -p '{"spec":{"selector":{"color":"green"}}}'
+#   kubectl exec -n lab-deployments client -- curl -s http://shop | grep Name   # green
+#
+# In a GitOps setup you would change `color` in this file and apply it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: shop
+  namespace: lab-deployments
+  labels:
+    app: shop
+spec:
+  selector:
+    app: shop
+    color: blue           # <- the switch
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

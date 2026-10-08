@@ -1,0 +1,40 @@
+{{- /*
+ConfigMap with the nginx server config and the HTML page.
+The Deployment has a checksum of THIS rendered file in a pod annotation, so
+changing .Values.message changes the pod template and triggers a rollout
+(Helm's equivalent of Kustomize's hash suffix - module 17).
+Don't put .Release.Revision in here: it changes on EVERY upgrade and would
+restart all pods each time, even when nothing else changed.
+*/ -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "webapp.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "webapp.labels" . | nindent 4 }}
+data:
+  default.conf: |
+    server {
+        listen 8080;
+        server_name _;
+        root /usr/share/nginx/html;
+
+        location = /healthz {
+            access_log off;
+            default_type text/plain;
+            return 200 "ok\n";
+        }
+        location / {
+            index index.html;
+        }
+    }
+  index.html: |
+    <!doctype html>
+    <html>
+      <head><title>{{ .Release.Name }}</title></head>
+      <body>
+        <h1>{{ .Values.message | html }}</h1>
+        <p>release={{ .Release.Name }} chart={{ include "webapp.chart" . }} image={{ include "webapp.image" . }}</p>
+      </body>
+    </html>

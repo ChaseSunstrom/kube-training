@@ -1,0 +1,27 @@
+# 10 - internalTrafficPolicy: Local - only use pods on the CLIENT'S node.
+#
+# For traffic from inside the cluster (pod -> ClusterIP), kube-proxy normally
+# picks any ready pod on any node. With Local it only picks pods on the
+# node where the client runs: no cross-node hop - but if that node has no
+# ready pod, the connection FAILS (it does not fall back to other nodes).
+# Typical use: talking to a node-local agent run by a DaemonSet (module 09).
+#
+#   kubectl apply -f modules/04-services/10-internal-traffic-policy.yaml
+#   kubectl exec -n lab-services client -- \
+#     sh -c 'for i in $(seq 6); do curl -s -m 2 http://whoami-local | grep Hostname || echo FAILED; done'
+#   # every answer comes from a whoami pod on the client's node (compare -o wide)
+apiVersion: v1
+kind: Service
+metadata:
+  name: whoami-local
+  namespace: lab-services
+  labels:
+    app: whoami
+spec:
+  selector:
+    app: whoami
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+  internalTrafficPolicy: Local

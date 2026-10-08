@@ -1,0 +1,33 @@
+# 04 - The same failing command, with restartPolicy: OnFailure.
+#
+# With OnFailure the kubelet restarts the CONTAINER inside the SAME POD
+# (watch the RESTARTS column grow, with CrashLoopBackOff in between). The Job
+# controller counts those restarts against backoffLimit. When the limit is
+# exceeded the Job is marked Failed and its running pod is deleted - so with
+# OnFailure you usually have NO pod left to read the final logs from.
+#
+# Rule of thumb: Never = better debuggability (every attempt is kept),
+# OnFailure = fewer pods (cheaper on large Jobs). podFailurePolicy and
+# backoffLimitPerIndex (08, 09) require Never.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: fail-onfailure
+  namespace: lab-jobs
+  labels:
+    app: fail-onfailure
+spec:
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app: fail-onfailure
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: flaky
+          image: busybox:1.37
+          command: ["sh", "-c", "echo \"$(date +%T) attempt in pod $(hostname)\"; exit 1"]
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 100m, memory: 32Mi }

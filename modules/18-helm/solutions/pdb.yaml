@@ -1,0 +1,43 @@
+{{- /*
+Exercise 1 - solution: an optional PodDisruptionBudget for the webapp chart.
+
+1. Copy this file to chart/templates/pdb.yaml
+2. Add to chart/values.yaml:
+
+     pdb:
+       enabled: false
+       maxUnavailable: 1
+
+3. Add to "properties" in chart/values.schema.json (the schema rejects
+   unknown top-level keys, so step 2 alone fails with
+   "additional properties 'pdb' not allowed"):
+
+     "pdb": {
+       "type": "object",
+       "additionalProperties": false,
+       "properties": {
+         "enabled": { "type": "boolean" },
+         "maxUnavailable": { "type": ["integer", "string"] }
+       }
+     }
+
+4. helm lint chart && helm upgrade hello ./chart -n lab-helm --reuse-values --set pdb.enabled=true
+   kubectl -n lab-helm get pdb
+
+The guard `gt (int .Values.replicaCount) 1` avoids a PDB that would block
+node drains forever for a single replica.
+*/ -}}
+{{- if and .Values.pdb.enabled (gt (int .Values.replicaCount) 1) }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "webapp.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "webapp.labels" . | nindent 4 }}
+spec:
+  maxUnavailable: {{ .Values.pdb.maxUnavailable }}
+  selector:
+    matchLabels:
+      {{- include "webapp.selectorLabels" . | nindent 6 }}
+{{- end }}

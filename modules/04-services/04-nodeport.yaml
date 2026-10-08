@@ -1,0 +1,33 @@
+# 04 - NodePort: also reachable on <any node IP>:<nodePort>.
+#
+# A NodePort Service is a ClusterIP Service PLUS a port (30000-32767 by
+# default) opened by kube-proxy on EVERY node. Traffic arriving at any node
+# on that port is forwarded to a ready pod - on that node or another one.
+#
+# The course's kind config maps the control-plane container's port 30080 to
+# localhost:30080 on your machine, so:
+#   kubectl apply -f modules/04-services/04-nodeport.yaml
+#   curl http://localhost:30080
+# (On the single-node config or another cluster without that mapping, use
+#  `kubectl port-forward` instead, or curl a node IP from inside the docker network.)
+apiVersion: v1
+kind: Service
+metadata:
+  name: whoami-nodeport
+  namespace: lab-services
+  labels:
+    app: whoami
+spec:
+  type: NodePort
+  selector:
+    app: whoami
+  ports:
+    - name: http
+      port: 80                  # ClusterIP port (still there)
+      targetPort: http
+      nodePort: 30080           # fixed so it matches the kind port mapping; omit to get a random one
+  # Cluster (default): any node forwards to any pod; the client IP is replaced
+  #   by the node's (SNAT), so the pod sees a node IP as RemoteAddr.
+  # Local: a node only forwards to pods ON THAT NODE (no extra hop, real
+  #   client IP preserved); nodes without a ready pod drop the traffic.
+  externalTrafficPolicy: Cluster

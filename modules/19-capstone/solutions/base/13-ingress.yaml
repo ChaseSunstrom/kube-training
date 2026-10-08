@@ -1,0 +1,28 @@
+# Public entry point: http://capstone.localtest.me/ -> frontend Service.
+# (*.localtest.me is a public DNS name that always resolves to 127.0.0.1, and
+#  the kind cluster maps host port 80 to the control-plane node where the
+#  ingress controller from module 12 listens.)
+#
+# ingressClassName must match the controller you installed in module 12
+# (`kubectl get ingressclass`). The lab overlay sets it in ONE place - see
+# overlays/lab/kustomization.yaml.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: capstone
+  namespace: lab-capstone
+  labels:
+    app: frontend
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: capstone.localtest.me
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  name: http

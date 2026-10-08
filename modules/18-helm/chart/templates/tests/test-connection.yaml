@@ -1,0 +1,45 @@
+{{- /*
+A TEST: a pod with the "test" hook. It is only created by `helm test <release>`
+and must exit 0 for the test to pass. Here: fetch the page through the
+Service and check that it contains the configured message.
+*/ -}}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "webapp.fullname" . }}-test-connection
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "webapp.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 100                  # curl_user in the curlimages/curl image
+    runAsGroup: 101
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: curl
+      image: curlimages/curl:8.11.1
+      command:
+        - sh
+        - -c
+        - |
+          set -e
+          url="http://{{ include "webapp.fullname" . }}:{{ .Values.service.port }}/"
+          echo "GET $url"
+          page="$(curl -fsS --max-time 5 "$url")"
+          echo "$page" | grep -F {{ .Values.message | html | squote }}
+          echo "test passed"
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: ["ALL"]
+      resources:
+        requests: { cpu: 10m, memory: 16Mi }
+        limits:   { cpu: 50m, memory: 32Mi }

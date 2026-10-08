@@ -1,0 +1,22 @@
+# 07 - A Service WITHOUT a selector.
+#
+# Without a selector, Kubernetes does not create endpoints for the Service:
+# YOU provide them as an EndpointSlice (08). kube-proxy and DNS treat it
+# exactly like any other ClusterIP Service. Use it to put a stable in-cluster
+# name and IP in front of something that is not a pod: a database on a VM,
+# a service in another cluster, a test double.
+#
+#   kubectl apply -f modules/04-services/07-service-without-selector.yaml
+#   kubectl get endpointslices -n lab-services -l kubernetes.io/service-name=legacy   # nothing yet
+apiVersion: v1
+kind: Service
+metadata:
+  name: legacy
+  namespace: lab-services
+  labels:
+    app: legacy
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80      # with manual endpoints, the EndpointSlice port is what is used

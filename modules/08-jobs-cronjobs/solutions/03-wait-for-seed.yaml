@@ -1,0 +1,97 @@
+# Solution to exercise 3 - start the app only after the seed Job succeeded,
+# without an external pipeline.
+#
+# An init container runs `kubectl wait` against the API server. The app
+# container cannot start until it exits 0, i.e. until job/seed-redis has the
+# Complete condition. The pod's ServiceAccount needs permission to read Jobs
+# (RBAC: modules/11-rbac).
+#
+#   kubectl delete job seed-redis -n lab-jobs --ignore-not-found
+#   kubectl apply -f solutions/03-wait-for-seed.yaml     # app waits (Init:0/1)
+#   kubectl apply -f 14-job-seed.yaml                    # ... and starts when the seed is done
+#
+# Alternatives: let the pipeline run `kubectl wait` before deploying, Helm
+# pre-install/pre-upgrade hooks, Argo CD PreSync hooks / sync waves - or have
+# the app itself check the schema version at start-up. For a seed/migration
+# that must hand a ReadWriteOnce volume to the app afterwards, see
+# ../../../scenarios/rwo-pvc-ordered-pods/README.md
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: shop
+  namespace: lab-jobs
+  labels:
+    app: shop
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: job-reader
+  namespace: lab-jobs
+  labels:
+    app: shop
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch"]     # kubectl wait needs all three
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: shop-job-reader
+  namespace: lab-jobs
+  labels:
+    app: shop
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: job-reader
+subjects:
+  - kind: ServiceAccount
+    name: shop
+    namespace: lab-jobs
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shop
+  namespace: lab-jobs
+  labels:
+    app: shop
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: shop
+  template:
+    metadata:
+      labels:
+        app: shop
+    spec:
+      serviceAccountName: shop
+      initContainers:
+        - name: wait-for-seed
+          # Distroless image: no shell, the entrypoint is kubectl itself.
+          image: rancher/kubectl:v1.36.2
+          args:
+            - wait
+            - --namespace=lab-jobs
+            - --for=condition=complete
+            - job/seed-redis
+            - --timeout=600s
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits:   { cpu: 100m, memory: 64Mi }
+      containers:
+        - name: shop
+          image: redis:7.4-alpine        # stand-in "app" that reads the seeded data
+          command:
+            - sh
+            - -c
+            - |
+              trap 'exit 0' TERM
+              echo "app started, schema_version=$(redis-cli -h redis GET schema_version)"
+              sleep 3600 & wait $!
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 100m, memory: 32Mi }

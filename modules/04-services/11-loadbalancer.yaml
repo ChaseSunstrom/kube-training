@@ -1,0 +1,30 @@
+# 11 - type: LoadBalancer - and why it stays <pending> on kind.
+#
+# A LoadBalancer Service is a NodePort Service (which is a ClusterIP Service)
+# PLUS a request: "someone, please create an external load balancer that
+# sends traffic to the node ports". In a cloud, the cloud-controller-manager
+# does that and writes the address into status.loadBalancer.ingress.
+# kind has no cloud provider, so nobody answers and EXTERNAL-IP stays
+# <pending> forever - while the ClusterIP and the NodePort work normally.
+#
+# Fix on kind: run cloud-provider-kind (https://github.com/kubernetes-sigs/cloud-provider-kind),
+# which plays the cloud's role and gives the Service a reachable IP.
+# On bare metal: MetalLB, kube-vip, Cilium LB-IPAM, ...
+#
+#   kubectl apply -f modules/04-services/11-loadbalancer.yaml
+#   kubectl get service whoami-lb -n lab-services     # EXTERNAL-IP <pending>
+apiVersion: v1
+kind: Service
+metadata:
+  name: whoami-lb
+  namespace: lab-services
+  labels:
+    app: whoami
+spec:
+  type: LoadBalancer
+  selector:
+    app: whoami
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

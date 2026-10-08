@@ -1,0 +1,45 @@
+# 01 - The simplest Job: run one pod to successful completion.
+#
+# A Job creates pods until the required number of them have SUCCEEDED (exit
+# code 0). Unlike a Deployment, it does not restart a pod that finished
+# successfully - "done" is the goal, not "running".
+#
+# Things every Job pod template needs:
+#   * restartPolicy: Never or OnFailure ("Always" is rejected for Jobs);
+#   * a command that EXITS. A command that never ends gives a Job that never
+#     completes.
+#
+# Try:
+#   kubectl wait -n lab-jobs --for=condition=complete job/hello --timeout=60s
+#   kubectl logs -n lab-jobs job/hello
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: hello
+  namespace: lab-jobs
+  labels:
+    app: hello
+spec:
+  # backoffLimit: 6 is the default - how many failed attempts before the
+  # whole Job is marked Failed. Written out here so you know it exists.
+  backoffLimit: 6
+  template:
+    metadata:
+      labels:
+        app: hello
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: hello
+          image: busybox:1.37
+          command:
+            - sh
+            - -c
+            - |
+              echo "Hello from $(hostname)"
+              # A tiny bit of "work": sum 1..1000 with awk.
+              awk 'BEGIN { for (i = 1; i <= 1000; i++) s += i; print "sum(1..1000) =", s }'
+              sleep 3
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 100m, memory: 32Mi }

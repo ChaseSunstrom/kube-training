@@ -1,0 +1,42 @@
+# 12 - concurrencyPolicy in action.
+#
+# This CronJob fires every minute but each run takes 150 seconds, so runs
+# overlap. Start with Allow and see two or three Jobs active at once; then
+# switch the policy (README step 12) and compare:
+#   kubectl patch cronjob slow -n lab-jobs -p '{"spec":{"concurrencyPolicy":"Forbid"}}'
+#   kubectl patch cronjob slow -n lab-jobs -p '{"spec":{"concurrencyPolicy":"Replace"}}'
+#
+# Whichever you pick, cron jobs must be IDEMPOTENT: the controller
+# guarantees "about once", not "exactly once" - a run can be skipped (missed
+# deadline) or, rarely, happen twice.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: slow
+  namespace: lab-jobs
+  labels:
+    app: slow
+spec:
+  schedule: "*/1 * * * *"
+  timeZone: "Etc/UTC"
+  concurrencyPolicy: Allow
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    metadata:
+      labels:
+        app: slow
+    spec:
+      template:
+        metadata:
+          labels:
+            app: slow
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: slow
+              image: busybox:1.37
+              command: ["sh", "-c", "echo \"$(date -u +%T) start\"; sleep 150; echo \"$(date -u +%T) end\""]
+              resources:
+                requests: { cpu: 10m, memory: 16Mi }
+                limits:   { cpu: 100m, memory: 32Mi }

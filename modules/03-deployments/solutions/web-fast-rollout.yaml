@@ -1,0 +1,73 @@
+# Exercise 2 - solution: the fastest safe rollout.
+#
+# maxSurge: 100% starts a complete new set of pods at once (here 4 extra);
+# maxUnavailable: 0 keeps every old pod until its replacements are available.
+# The result is like blue/green inside one Deployment: capacity never drops,
+# the switch happens as soon as the new pods are ready, at the cost of
+# briefly running double the pods (8 here - make sure the cluster/quota fits).
+#
+# Compare with maxSurge: 0, maxUnavailable: 1 - never more than 4 pods
+# (no extra capacity needed), but you run with 3 available pods during the
+# rollout and it takes four steps.
+#
+#   kubectl apply -f modules/03-deployments/solutions/web-fast-rollout.yaml
+#   kubectl get rs -n lab-deployments -l app=web -w
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: lab-deployments
+  labels:
+    app: web
+  annotations:
+    # Shown in the CHANGE-CAUSE column of `kubectl rollout history`.
+    # Update it together with every change you roll out.
+    kubernetes.io/change-cause: "v6: fast rollout (maxSurge 100%)"
+spec:
+  replicas: 4
+  # The selector is IMMUTABLE after creation and must match the template labels.
+  selector:
+    matchLabels:
+      app: web
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # During a rollout, at most replicas + maxSurge pods exist (here 5)...
+      maxSurge: "100%"           # was 1
+      # ...and at least replicas - maxUnavailable are available (here 4).
+      # 0 = never go below full capacity: the safest setting for a web app,
+      # and the reason a broken image can't take the app down (step 6).
+      maxUnavailable: 0
+  # A new pod must stay Ready for 5s before it counts as "available" -
+  # catches pods that crash right after their first successful probe.
+  minReadySeconds: 5
+  # If the rollout makes no progress for 60s, mark it failed
+  # (condition Progressing=False, reason ProgressDeadlineExceeded).
+  # It does NOT roll back by itself. Default is 600s.
+  progressDeadlineSeconds: 60
+  # Keep 5 old ReplicaSets for `kubectl rollout undo` (default 10).
+  revisionHistoryLimit: 5
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+        - name: whoami
+          image: traefik/whoami:v1.10
+          env:
+            - name: WHOAMI_NAME
+              value: "v6"
+          ports:
+            - name: http
+              containerPort: 80
+          # Readiness gates the rollout: a new pod only replaces an old one
+          # once it is Ready (+ minReadySeconds).
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 2
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 100m, memory: 32Mi }

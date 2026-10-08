@@ -1,0 +1,68 @@
+# One-shot Job: wait until PostgreSQL accepts connections, then create the
+# schema and demo rows from seed.sql (generated ConfigMap db-seed).
+#
+# The SQL is idempotent, so retries (backoffLimit) and re-runs are safe.
+# The wait loop is bounded by activeDeadlineSeconds: if the database never
+# comes up, the Job FAILS visibly instead of waiting forever (module 16, app 10).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-seed
+  namespace: lab-capstone
+  labels:
+    app: db-seed
+spec:
+  backoffLimit: 4
+  activeDeadlineSeconds: 300
+  template:
+    metadata:
+      labels:
+        app: db-seed
+        db-access: "true"           # allowed to reach the database (NetworkPolicy)
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70
+        runAsGroup: 70
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: seed
+          image: postgres:16-alpine     # for psql / pg_isready
+          command:
+            - sh
+            - -c
+            - |
+              until pg_isready -q -t 2; do
+                echo "$(date -Iseconds) waiting for postgres at $PGHOST:5432 ..."
+                sleep 2
+              done
+              echo "postgres is up - seeding"
+              psql -X -v ON_ERROR_STOP=1 -f /seed/seed.sql
+          env:
+            - name: PGHOST
+              value: db
+            - name: PGUSER
+              valueFrom: { secretKeyRef: { name: db-credentials, key: POSTGRES_USER } }
+            - name: PGPASSWORD
+              valueFrom: { secretKeyRef: { name: db-credentials, key: POSTGRES_PASSWORD } }
+            - name: PGDATABASE
+              valueFrom: { secretKeyRef: { name: db-credentials, key: POSTGRES_DB } }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: seed
+              mountPath: /seed
+              readOnly: true
+          resources:
+            requests: { cpu: 20m, memory: 32Mi }
+            limits:   { cpu: 200m, memory: 64Mi }
+      volumes:
+        - name: seed
+          configMap:
+            name: db-seed

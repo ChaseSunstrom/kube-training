@@ -1,0 +1,46 @@
+# 08 - podFailurePolicy: decide per failure whether retrying makes sense.
+#
+# backoffLimit treats every failure the same. In reality:
+#   * exit code 42 here means "bad input / bug" - retrying is pointless,
+#     fail the Job NOW instead of burning 6 retries;
+#   * a pod killed by a disruption (node drain, preemption, eviction) is not
+#     the program's fault - retry it WITHOUT counting against backoffLimit.
+#
+# Rules are checked in order; the first match wins. Actions:
+#   FailJob   - mark the whole Job Failed immediately
+#   FailIndex - fail just this index (Indexed Jobs with backoffLimitPerIndex)
+#   Ignore    - retry, and don't count the failure
+#   Count     - the default behaviour (counts against backoffLimit)
+# Requires restartPolicy: Never.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pod-failure-policy
+  namespace: lab-jobs
+  labels:
+    app: pod-failure-policy
+spec:
+  backoffLimit: 6
+  podFailurePolicy:
+    rules:
+      - action: FailJob
+        onExitCodes:
+          containerName: main
+          operator: In
+          values: [42]
+      - action: Ignore
+        onPodConditions:
+          - type: DisruptionTarget   # set on pods evicted, preempted, drained ...
+  template:
+    metadata:
+      labels:
+        app: pod-failure-policy
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: main
+          image: busybox:1.37
+          command: ["sh", "-c", "echo 'config file is invalid, giving up'; exit 42"]
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 100m, memory: 32Mi }

@@ -1,0 +1,16 @@
+# ClusterIP Service in front of the backend pods. The frontend's nginx
+# proxies /api/ to http://backend:8080.
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: lab-capstone
+  labels:
+    app: backend
+spec:
+  selector:
+    app: backend
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

@@ -1,0 +1,17 @@
+{{- /* Printed after install/upgrade (and by `helm status`). It is a template too. */ -}}
+webapp "{{ .Release.Name }}" is deployed (revision {{ .Release.Revision }}) in namespace {{ .Release.Namespace }}.
+
+  Image:    {{ include "webapp.image" . }}
+  Replicas: {{ .Values.replicaCount }}
+  Message:  {{ .Values.message }}
+
+Try it:
+{{- if .Values.ingress.enabled }}
+  curl http://{{ .Values.ingress.host }}/
+{{- else }}
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "webapp.fullname" . }} 8080:{{ .Values.service.port }}
+  curl http://localhost:8080/
+{{- end }}
+
+Run the chart's tests:
+  helm test {{ .Release.Name }} -n {{ .Release.Namespace }} --logs

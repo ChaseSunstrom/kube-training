@@ -1,0 +1,11 @@
+# Module 08 - Jobs & CronJobs
+#
+# Everything lives in lab-jobs. Jobs and their pods stay around after they
+# finish (so you can read logs) until you delete them, a TTL removes them, or
+# a CronJob's history limit does. Cleanup:  kubectl delete namespace lab-jobs
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-jobs
+  labels:
+    app: jobs

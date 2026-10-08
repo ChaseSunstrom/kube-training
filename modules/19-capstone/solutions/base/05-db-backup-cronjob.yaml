@@ -1,0 +1,76 @@
+# Nightly logical backup with pg_dump, keeping the newest 5 dumps.
+#
+# Run one now (that's what verify.sh does):
+#   kubectl -n lab-capstone create job --from=cronjob/db-backup db-backup-manual
+#   kubectl -n lab-capstone logs -f job/db-backup-manual
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: db-backup
+  namespace: lab-capstone
+  labels:
+    app: db-backup
+spec:
+  schedule: "17 2 * * *"            # 02:17 every day (avoid :00 - everybody's cron runs then)
+  timeZone: "Etc/UTC"
+  concurrencyPolicy: Forbid         # never two dumps writing to the RWO volume at once
+  startingDeadlineSeconds: 3600     # if the controller was down at 02:17, still run within the hour
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 900
+      template:
+        metadata:
+          labels:
+            app: db-backup
+            db-access: "true"
+        spec:
+          restartPolicy: OnFailure
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 70
+            runAsGroup: 70
+            fsGroup: 70
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: pg-dump
+              image: postgres:16-alpine
+              command:
+                - sh
+                - -c
+                - |
+                  set -eu
+                  file="/backups/capstone-$(date -u +%Y%m%dT%H%M%SZ).sql.gz"
+                  pg_dump --no-owner | gzip > "$file.tmp"
+                  mv "$file.tmp" "$file"          # never leave a half-written dump with the final name
+                  echo "backup written: $file ($(wc -c < "$file") bytes)"
+                  ls -1t /backups/*.sql.gz | tail -n +6 | xargs -r rm -f --
+                  echo "backups kept:"; ls -l /backups
+              env:
+                - name: PGHOST
+                  value: db
+                - name: PGUSER
+                  valueFrom: { secretKeyRef: { name: db-credentials, key: POSTGRES_USER } }
+                - name: PGPASSWORD
+                  valueFrom: { secretKeyRef: { name: db-credentials, key: POSTGRES_PASSWORD } }
+                - name: PGDATABASE
+                  valueFrom: { secretKeyRef: { name: db-credentials, key: POSTGRES_DB } }
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: backups
+                  mountPath: /backups
+              resources:
+                requests: { cpu: 20m, memory: 32Mi }
+                limits:   { cpu: 500m, memory: 128Mi }
+          volumes:
+            - name: backups
+              persistentVolumeClaim:
+                claimName: db-backups

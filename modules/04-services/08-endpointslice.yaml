@@ -1,0 +1,31 @@
+# 08 - A hand-written EndpointSlice for the `legacy` Service (07).
+#
+# The label kubernetes.io/service-name links the slice to the Service. The
+# managed-by label says "not the EndpointSlice controller", so Kubernetes
+# leaves it alone.
+#
+# 192.0.2.10 is a reserved documentation address (TEST-NET-1): nothing
+# answers there. The README replaces it with the IP of a container running
+# OUTSIDE the cluster, on the kind docker network.
+#
+#   kubectl apply -f modules/04-services/08-endpointslice.yaml
+#   kubectl describe service legacy -n lab-services       # Endpoints: 192.0.2.10:80
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: legacy-1
+  namespace: lab-services
+  labels:
+    app: legacy
+    kubernetes.io/service-name: legacy
+    endpointslice.kubernetes.io/managed-by: training.example.com
+addressType: IPv4
+ports:
+  - name: http            # must match the Service port name
+    protocol: TCP
+    port: 80
+endpoints:
+  - addresses:
+      - "192.0.2.10"      # <- replaced in the Lab
+    conditions:
+      ready: true

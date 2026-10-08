@@ -1,0 +1,22 @@
+# Where the backup CronJob writes its dumps.
+#
+# ReadWriteOnce + the local-path provisioner: the volume lives on ONE node,
+# and every backup pod is scheduled onto that node automatically (the PV has
+# node affinity). Two backup pods must never write at once - the CronJob uses
+# concurrencyPolicy: Forbid. For the general "one RWO volume, several pods,
+# in order" problem see ../../../../scenarios/rwo-pvc-ordered-pods/README.md.
+#
+# A real backup must leave the cluster (object storage, another site);
+# a PVC next to the database only protects against "oops, DROP TABLE".
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: db-backups
+  namespace: lab-capstone
+  labels:
+    app: db-backup
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi

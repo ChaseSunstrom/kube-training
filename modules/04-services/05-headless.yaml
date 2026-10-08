@@ -1,0 +1,25 @@
+# 05 - Headless Service: no virtual IP, DNS returns the POD IPs.
+#
+# clusterIP: None tells Kubernetes "don't allocate a ClusterIP, don't load
+# balance". kube-proxy ignores it; CoreDNS answers a query for the name with
+# one A record per READY pod. Clients pick an address themselves.
+# Used by StatefulSets (stable per-pod DNS names, module 07), by clients that
+# do their own load balancing (gRPC, databases), and for peer discovery.
+#
+#   kubectl apply -f modules/04-services/05-headless.yaml
+#   kubectl exec -n lab-services client -- dig +short whoami-headless.lab-services.svc.cluster.local
+apiVersion: v1
+kind: Service
+metadata:
+  name: whoami-headless
+  namespace: lab-services
+  labels:
+    app: whoami
+spec:
+  clusterIP: None
+  selector:
+    app: whoami
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

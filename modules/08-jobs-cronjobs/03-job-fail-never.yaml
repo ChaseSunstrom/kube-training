@@ -1,0 +1,32 @@
+# 03 - A Job that always fails, with restartPolicy: Never.
+#
+# With Never, every failed attempt is a NEW POD. The failed pods are kept so
+# you can read their logs - watch them pile up:
+#   kubectl get pods -n lab-jobs -l app=fail-never -w
+#
+# backoffLimit: 2  -> 1 try + 2 retries = 3 failed pods, then the Job is
+# marked Failed with reason BackoffLimitExceeded. Between retries the
+# controller waits with exponential back-off: 10s, 20s, 40s ... capped at
+# 6 minutes.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: fail-never
+  namespace: lab-jobs
+  labels:
+    app: fail-never
+spec:
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app: fail-never
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: flaky
+          image: busybox:1.37
+          command: ["sh", "-c", "echo \"$(date +%T) attempt in pod $(hostname)\"; exit 1"]
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 100m, memory: 32Mi }

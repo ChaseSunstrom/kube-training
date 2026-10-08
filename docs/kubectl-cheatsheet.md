@@ -1,11 +1,14 @@
 # kubectl cheatsheet
 
 The commands you will type every day, grouped by task. Every command on this
-page was run against the course cluster (kind, Kubernetes v1.33, kubectl
-v1.33). The exceptions are labelled: commands that change **nodes** were
-checked with `--dry-run=server` so the shared cluster was never changed, and
-`kubectl top` needs metrics-server
-([module 14](../modules/14-autoscaling/README.md)).
+page was run with **kubectl v1.37** against a kind cluster running
+**Kubernetes v1.37**, the version this course targets. Most commands were
+also checked with kubectl v1.33; where the two versions behave differently,
+the page says so. Two kinds of exception are labelled: commands that change
+**nodes** were checked with `--dry-run=server` so the shared test cluster
+was never changed, and `kubectl top` needs metrics-server
+([module 14](../modules/14-autoscaling/README.md)), which the test cluster
+didn't have.
 
 The examples use these names, so swap in your own:
 
@@ -253,7 +256,9 @@ kubectl create ingress web-tls --class=nginx --rule='web.localhost/=web:80,tls=w
 kubectl create pdb web --selector=app=web --min-available=1 --dry-run=client -o yaml
 kubectl create quota lab-quota --hard=pods=10,requests.cpu=2,requests.memory=2Gi --dry-run=client -o yaml
 kubectl create priorityclass lab-high --value=1000 --description='lab only' --dry-run=client -o yaml
-kubectl autoscale deployment web --min=2 --max=5 --cpu-percent=70 --dry-run=client -o yaml   # autoscaling/v2 HPA
+kubectl autoscale deployment web --min=2 --max=5 --cpu=70% --dry-run=client -o yaml   # autoscaling/v2 HPA
+#   (kubectl 1.37 also has --memory=...; older kubectl only has --cpu-percent=70, which 1.37 still
+#    accepts but marks deprecated)
 kubectl create namespace lab-demo --dry-run=client -o yaml
 
 # ServiceAccount token (real, short-lived; not YAML)
@@ -318,6 +323,8 @@ kubectl rollout history deploy/web
 kubectl rollout history deploy/web --revision=2   # the pod template of that revision
 kubectl rollout undo deploy/web                   # back to the previous revision
 kubectl rollout undo deploy/web --to-revision=2
+#   kubectl 1.37 warns that undo doesn't update the last-applied-configuration annotation:
+#   fix the manifest in Git too, or the next "kubectl apply" brings the bad version back
 kubectl rollout restart deploy/web                # new pods, same spec (e.g. to reload a ConfigMap)
 kubectl rollout pause deploy/web                  # batch several changes...
 kubectl set env deploy/web A=1; kubectl set env deploy/web B=2
@@ -330,7 +337,7 @@ kubectl annotate deploy/web kubernetes.io/change-cause='bump nginx' --overwrite
 kubectl scale deploy/web --replicas=5
 kubectl scale deploy/web --current-replicas=5 --replicas=3   # only if it is currently 5
 kubectl scale sts/redis --replicas=0                         # StatefulSets scale highest ordinal first
-kubectl autoscale deploy web --min=2 --max=5 --cpu-percent=70  # HPA (needs metrics-server + CPU requests)
+kubectl autoscale deploy web --min=2 --max=5 --cpu=70%        # HPA (needs metrics-server + CPU requests)
 kubectl get hpa -w
 ```
 
@@ -391,11 +398,20 @@ kubectl run net --rm -i --restart=Never --image=nicolaka/netshoot:v0.13 -- nc -z
 kubectl exec bb -- cat /etc/resolv.conf        # search domains, nameserver, ndots:5
 ```
 
+`kubectl run -i` / `-it` (v1.37) first prints a notice that the session is
+recorded in the container logs, which is harmless. It attaches only after
+the container has started, so a command that finishes very fast can lose
+its first lines of output. If that happens, drop `--rm -i`, then read the
+output with `kubectl logs <pod>` and delete the pod. Use full names with
+busybox's `nslookup`: it ignores the search domains, so
+`nslookup kubernetes.default` fails with NXDOMAIN even when DNS works.
+
 ## 13. kubectl debug
 
-Always pass `--profile` (`general` is a good default). If you leave it out,
-kubectl v1.33 uses the deprecated `legacy` profile and prints a warning.
-Profiles: `general`, `baseline`, `restricted`, `netadmin`, `sysadmin`.
+Profiles: `general` (the default in kubectl v1.37), `baseline`,
+`restricted`, `netadmin`, `sysadmin`. Older kubectl versions (e.g. v1.33)
+default to the deprecated `legacy` profile and print a warning. Passing
+`--profile=general` explicitly behaves the same on both.
 
 ```bash
 # 1. Ephemeral container in a RUNNING pod (great for distroless/minimal images)
@@ -415,7 +431,7 @@ kubectl debug web-xxxx -it --copy-to=web-debug --image=busybox:1.37 --share-proc
 kubectl debug bb --copy-to=bb-debug --set-image=bb=busybox:1.37 --profile=general   # change images ('*=img' = all)
 #   Copies drop labels (so Services don't send them traffic) and probes; see --keep-labels,
 #   --keep-liveness, --keep-readiness, --same-node.
-#   CAVEAT (kubectl 1.33): a copy made with ONLY --set-image keeps the labels and
+#   CAVEAT (kubectl 1.37 and 1.33): a copy made with ONLY --set-image keeps the labels and
 #   ownerReferences of the original, so a ReplicaSet-owned copy is deleted at once.
 #   For Deployment pods, combine --set-image with --image=... or --container=... -- <cmd>.
 kubectl delete pod crashy-debug web-debug  # copies are ordinary pods: clean them up
@@ -567,7 +583,7 @@ kubectl describe node kube-training-control-plane | grep Taints
 
 ## 20. Kustomize (`-k`)
 
-kubectl v1.33 has Kustomize v5.6 built in (`kubectl version` prints it).
+kubectl has Kustomize built in (v5.8 in kubectl v1.37; `kubectl version` prints it).
 
 ```bash
 kubectl kustomize overlays/dev            # render to stdout (= kustomize build)

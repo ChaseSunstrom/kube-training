@@ -1,0 +1,17 @@
+# Chart metadata. apiVersion v2 = Helm 3+ chart format (still current in Helm 4).
+apiVersion: v2
+name: webapp
+description: A small nginx web app used to learn Helm (kube-training module 18)
+type: application            # "library" charts only contain helpers for other charts
+
+# version    = the version of the CHART (packaging, templates). Bump it on every
+#              change you publish. Must be SemVer.
+# appVersion = the version of the APP it deploys. Informational, but our
+#              templates use it as the default image tag.
+version: 0.1.0
+appVersion: "1.27-alpine"
+
+kubeVersion: ">=1.30.0-0"    # refuse to install on clusters that are too old
+keywords: [nginx, web, training]
+maintainers:
+  - name: kube-training

@@ -1,0 +1,37 @@
+# Solution to exercise 1 - a Job that fails about half of the time.
+#
+# Each attempt "rolls a die" (exit 1 if $RANDOM is odd). With
+# restartPolicy: Never every failed attempt leaves a pod behind, so
+#   kubectl get pods -n lab-jobs -l app=flaky
+# shows how many tries it took. The Job is Complete as soon as ONE attempt
+# succeeds, or Failed after 1 + backoffLimit failed attempts.
+# Run it a few times (kubectl delete -f ... && kubectl apply -f ...) - the
+# chance of 5 failures in a row is 1/32.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: flaky
+  namespace: lab-jobs
+  labels:
+    app: flaky
+spec:
+  backoffLimit: 4
+  template:
+    metadata:
+      labels:
+        app: flaky
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: flaky
+          image: busybox:1.37
+          command:
+            - sh
+            - -c
+            - |
+              n=$(awk 'BEGIN { srand(); print int(rand() * 100) }')
+              if [ $((n % 2)) -eq 1 ]; then echo "rolled $n: fail"; exit 1; fi
+              echo "rolled $n: success"
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 100m, memory: 32Mi }

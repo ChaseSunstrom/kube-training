@@ -1,0 +1,50 @@
+# Capstone reference solution - base.
+#
+# Everything the app needs, environment-neutral apart from the namespace
+# (the capstone has exactly one environment). The overlay in
+# ../overlays/lab adds the Namespace, the credentials Secret and the
+# environment-specific bits.
+#
+#   kubectl kustomize modules/19-capstone/solutions/base   # render only
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: lab-capstone
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: capstone
+    includeSelectors: false
+    includeTemplates: true
+
+resources:
+  - 01-db-service.yaml
+  - 02-db-statefulset.yaml
+  - 03-db-seed-job.yaml
+  - 04-db-backup-pvc.yaml
+  - 05-db-backup-cronjob.yaml
+  - 06-backend-deployment.yaml
+  - 07-backend-service.yaml
+  - 08-backend-pdb.yaml
+  - 09-backend-hpa.yaml
+  - 10-frontend-deployment.yaml
+  - 11-frontend-service.yaml
+  - 12-frontend-pdb.yaml
+  - 13-ingress.yaml
+  - 14-networkpolicies.yaml
+
+# Config as files in git, turned into hashed ConfigMaps: editing any of these
+# files changes the hash and rolls out the pods that use it.
+configMapGenerator:
+  - name: backend-app
+    files:
+      - files/api.sh
+  - name: frontend-nginx
+    files:
+      - files/default.conf
+  - name: frontend-html
+    files:
+      - files/index.html
+  - name: db-seed
+    files:
+      - files/seed.sql

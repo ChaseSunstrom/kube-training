@@ -1,0 +1,23 @@
+# 06 - A ReadWriteOnce volume for the `cache` Deployment (07).
+#
+# ReadWriteOnce (RWO) means "mounted read-write by ONE NODE at a time" -
+# not one pod! Several pods on the same node can still mount it together.
+# kind's default StorageClass `standard` (local-path) creates the volume as a
+# directory on whichever node the first pod lands on (WaitForFirstConsumer),
+# and pins the PersistentVolume to that node. Module 06 covers storage.
+#
+#   kubectl apply -f modules/03-deployments/06-recreate-pvc.yaml
+#   kubectl get pvc cache-data -n lab-deployments     # Pending until a pod uses it
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: cache-data
+  namespace: lab-deployments
+  labels:
+    app: cache
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: standard
+  resources:
+    requests:
+      storage: 100Mi

@@ -821,7 +821,7 @@ A helper container (a proxy, a log shipper) that runs next to the main app
 for the pod's whole life. A *native* sidecar is an init container with
 `restartPolicy: Always`. It starts before the app containers and keeps
 running, it doesn't keep a Job from completing, and it is stopped after
-the app containers. GA in v1.33.
+the app containers. GA since v1.33.
 → [01](../modules/01-pods/README.md)
 
 ### Startup probe

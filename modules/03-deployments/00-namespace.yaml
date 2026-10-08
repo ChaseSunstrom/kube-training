@@ -1,0 +1,8 @@
+# Namespace for module 03 (deployments).
+#   kubectl delete namespace lab-deployments   # removes everything in this module
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-deployments
+  labels:
+    app: deployments

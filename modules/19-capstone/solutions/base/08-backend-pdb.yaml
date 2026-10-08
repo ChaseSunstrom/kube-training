@@ -1,0 +1,14 @@
+# Keep at least one backend pod running during voluntary disruptions
+# (kubectl drain, node upgrades). With 2 replicas this allows 1 disruption.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: backend
+  namespace: lab-capstone
+  labels:
+    app: backend
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: backend

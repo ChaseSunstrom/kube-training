@@ -1,0 +1,21 @@
+# 03 - A client pod to send requests from inside the cluster.
+#
+#   kubectl exec -n lab-deployments client -- curl -s http://web
+#   # a request every 0.5s, printing only the version line:
+#   kubectl exec -n lab-deployments client -- \
+#     sh -c 'while true; do curl -s -m 1 http://web | grep Name || echo FAILED; sleep 0.5; done'
+apiVersion: v1
+kind: Pod
+metadata:
+  name: client
+  namespace: lab-deployments
+  labels:
+    app: client
+spec:
+  containers:
+    - name: curl
+      image: curlimages/curl:8.11.1
+      command: ["sh", "-c", "trap 'exit 0' TERM; sleep infinity & wait"]
+      resources:
+        requests: { cpu: 5m, memory: 8Mi }
+        limits: { cpu: 100m, memory: 32Mi }

@@ -1,0 +1,18 @@
+# Module 18 - Helm
+#
+# Helm can create the namespace for you (--create-namespace), but then nobody
+# owns it: `helm uninstall` never deletes it, and you can't label it. So we
+# create it ourselves - with Pod Security labels. Our chart passes the
+# "restricted" level (module 15); public charts may not, which is why this
+# namespace only WARNS about restricted and enforces baseline.
+#
+# Cleanup: helm uninstall ... ; kubectl delete namespace lab-helm
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-helm
+  labels:
+    app: helm
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/audit: restricted

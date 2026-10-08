@@ -1,0 +1,43 @@
+# Capstone reference solution - the "lab" environment.
+#
+#   kubectl apply -k modules/19-capstone/solutions/overlays/lab
+#   ./modules/19-capstone/verify.sh
+#   kubectl delete -k modules/19-capstone/solutions/overlays/lab
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespace.yaml
+  - ../../base
+
+namespace: lab-capstone
+
+labels:
+  - pairs:
+      env: lab
+    includeSelectors: false
+    includeTemplates: true
+
+# Credentials -> Secret db-credentials-<hash>; every secretRef/secretKeyRef
+# to "db-credentials" in the base is rewritten to the hashed name.
+secretGenerator:
+  - name: db-credentials
+    envs:
+      - db.env
+
+# Pin the frontend image by digest (module 15/17): the tag stays readable,
+# the digest guarantees the exact bytes.
+images:
+  - name: nginx
+    newTag: 1.27-alpine
+    digest: sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
+
+patches:
+  # The one place to set your ingress controller's class (kubectl get ingressclass).
+  - target:
+      kind: Ingress
+      name: capstone
+    patch: |-
+      - op: replace
+        path: /spec/ingressClassName
+        value: nginx

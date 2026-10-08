@@ -1,0 +1,30 @@
+# Scale the backend between 2 and 5 replicas on CPU (module 14).
+#
+# Needs metrics-server. Without it the HPA exists but shows
+# TARGETS <unknown>/70% and never scales - kubectl describe hpa explains why.
+# Utilization is relative to the container's CPU REQUEST (50m), which is
+# why every container needs a request for the HPA to work at all.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: backend
+  namespace: lab-capstone
+  labels:
+    app: backend
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: backend
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 120

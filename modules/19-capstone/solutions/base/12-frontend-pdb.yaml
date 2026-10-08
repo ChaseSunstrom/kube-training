@@ -1,0 +1,13 @@
+# At most one frontend pod down at a time during voluntary disruptions.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: frontend
+  namespace: lab-capstone
+  labels:
+    app: frontend
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: frontend

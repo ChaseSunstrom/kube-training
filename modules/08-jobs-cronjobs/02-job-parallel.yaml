@@ -1,0 +1,31 @@
+# 02 - completions + parallelism.
+#
+#   completions: 6   the Job is done when 6 pods have succeeded
+#   parallelism: 2   at most 2 pods run at the same time
+#
+# So the controller runs 2, then 2 more as those finish, then the last 2:
+# three "waves" of ~5 seconds. Each pod here is identical and doesn't know
+# which of the 6 it is - see 07-job-indexed.yaml for pods that do.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: parallel
+  namespace: lab-jobs
+  labels:
+    app: parallel
+spec:
+  completions: 6
+  parallelism: 2
+  template:
+    metadata:
+      labels:
+        app: parallel
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: worker
+          image: busybox:1.37
+          command: ["sh", "-c", "echo \"$(date +%T) $(hostname) working\"; sleep 5"]
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 100m, memory: 32Mi }

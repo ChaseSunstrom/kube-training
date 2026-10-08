@@ -1,0 +1,20 @@
+# 02 - A Service in front of `web`, so we can send traffic during rollouts.
+#
+# A Service gives a stable name/IP and load-balances over all READY pods
+# whose labels match its selector - whichever ReplicaSet they belong to.
+# That is what makes a rolling update invisible to clients.
+# (Services in depth: module 04.)
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  namespace: lab-deployments
+  labels:
+    app: web
+spec:
+  selector:
+    app: web
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

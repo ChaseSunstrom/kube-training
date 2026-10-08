@@ -1,0 +1,12 @@
+# The capstone namespace, enforcing the "restricted" Pod Security Standard:
+# every workload in the solution is non-root, drops all capabilities, uses
+# RuntimeDefault seccomp and never escalates privileges (module 15).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-capstone
+  labels:
+    app: capstone
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/audit: restricted

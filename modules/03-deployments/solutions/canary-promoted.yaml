@@ -1,0 +1,51 @@
+# Exercise 5 - solution: promote the canary.
+#
+# 1. Roll the new version out to the stable Deployment (a normal rolling
+#    update; its selector app=api,track=stable is unchanged).
+# 2. Remove the canary. Scaling it to 0 (rather than deleting it) keeps the
+#    object around for the next canary; deleting is fine too:
+#       kubectl scale deployment api-canary -n lab-deployments --replicas=0
+#
+#   kubectl apply -f modules/03-deployments/solutions/canary-promoted.yaml
+#   kubectl rollout status deployment/api-stable -n lab-deployments
+#   kubectl scale deployment api-canary -n lab-deployments --replicas=0
+#   kubectl exec -n lab-deployments client -- \
+#     sh -c 'for i in $(seq 20); do curl -s http://api | grep Name; done' | sort | uniq -c
+#   -> 20 Name: api stable (v2)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-stable
+  namespace: lab-deployments
+  labels:
+    app: api
+    track: stable
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: api
+      track: stable
+  template:
+    metadata:
+      labels:
+        app: api
+        track: stable
+    spec:
+      containers:
+        - name: whoami
+          image: traefik/whoami:v1.10
+          env:
+            - name: WHOAMI_NAME
+              value: "api stable (v2)"   # the canary's version, now everywhere
+          ports:
+            - name: http
+              containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 2
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 100m, memory: 32Mi }

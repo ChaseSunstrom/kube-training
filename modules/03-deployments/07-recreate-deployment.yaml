@@ -1,0 +1,61 @@
+# 07 - strategy: Recreate - stop ALL old pods first, then start the new ones.
+#
+# RollingUpdate would start a new pod while the old one still runs. For a
+# single-writer app on a ReadWriteOnce volume that is either
+#   * a hang: on cloud block storage the new pod lands on another node and
+#     waits forever with "Multi-Attach error" (the disk is still attached to
+#     the old node), and with maxUnavailable: 0 the rollout never finishes; or
+#   * worse, data corruption: on node-local storage (like kind's local-path)
+#     both pods run on the same node and write to the same files at once.
+# Recreate avoids both, at the price of a short outage during every rollout.
+# For the full story - including ReadWriteOncePod and ordered hand-offs -
+# see scenarios/rwo-pvc-ordered-pods.
+#
+#   kubectl apply -f modules/03-deployments/07-recreate-deployment.yaml
+#   kubectl get pods -n lab-deployments -l app=cache -w
+#   kubectl rollout restart deployment/cache -n lab-deployments   # (other terminal)
+#   -> the old pod is Terminating and GONE before the new one is even created
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cache
+  namespace: lab-deployments
+  labels:
+    app: cache
+  annotations:
+    kubernetes.io/change-cause: "redis with persistent data"
+spec:
+  replicas: 1                   # a single-writer app: exactly one copy
+  strategy:
+    type: Recreate              # no rollingUpdate block allowed with Recreate
+  selector:
+    matchLabels:
+      app: cache
+  template:
+    metadata:
+      labels:
+        app: cache
+    spec:
+      containers:
+        - name: redis
+          image: redis:7.4-alpine
+          # Append-only file: every write is persisted to /data, so data
+          # survives the pod being replaced.
+          args: ["--appendonly", "yes"]
+          ports:
+            - name: redis
+              containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            periodSeconds: 3
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 200m, memory: 64Mi }
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: cache-data

@@ -1,0 +1,49 @@
+# Solution to exercise 4 - successPolicy: "done when the leader is done".
+#
+# By default an Indexed Job needs EVERY index to succeed. A successPolicy
+# declares the Job successful earlier; remaining pods are then terminated.
+# Here index 0 is a "leader" that finishes after 5s, while the "workers"
+# (indexes 1-3) would run for 5 minutes. The Job completes after ~5s with the
+# SuccessCriteriaMet condition (reason SuccessPolicy), and the workers are
+# stopped. Typical use: distributed training where only the leader's result
+# matters.
+#
+#   kubectl apply -f solutions/04-success-policy.yaml
+#   kubectl wait -n lab-jobs --for=condition=complete job/leader-wins --timeout=60s
+#   kubectl get job leader-wins -n lab-jobs -o jsonpath='{.status.conditions}'
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: leader-wins
+  namespace: lab-jobs
+  labels:
+    app: leader-wins
+spec:
+  completionMode: Indexed          # successPolicy requires Indexed
+  completions: 4
+  parallelism: 4
+  successPolicy:
+    rules:
+      - succeededIndexes: "0"      # index 0 succeeding is enough
+  template:
+    metadata:
+      labels:
+        app: leader-wins
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: main
+          image: busybox:1.37
+          command:
+            - sh
+            - -c
+            - |
+              trap 'exit 143' TERM
+              if [ "$JOB_COMPLETION_INDEX" = 0 ]; then
+                echo "leader: working 5s"; sleep 5; echo "leader: done"; exit 0
+              fi
+              echo "worker $JOB_COMPLETION_INDEX: working 5 minutes"
+              sleep 300 & wait $!
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 100m, memory: 32Mi }

@@ -1,0 +1,62 @@
+# 11 - A CronJob: create a Job on a schedule.
+#
+# A CronJob is a Job FACTORY. Every time the schedule fires, the CronJob
+# controller creates a Job from jobTemplate (named <cronjob>-<minutes since
+# epoch>), and that Job creates pods as usual.
+#
+# schedule uses standard 5-field cron syntax:
+#   ┌───────────── minute (0-59)
+#   │ ┌─────────── hour (0-23)
+#   │ │ ┌───────── day of month (1-31)
+#   │ │ │ ┌─────── month (1-12)
+#   │ │ │ │ ┌───── day of week (0-6, Sunday = 0)
+#   * * * * *          "*/1 * * * *" = every minute (for the lab!)
+#                      "30 2 * * 1-5" = 02:30 on weekdays
+# Macros like @hourly, @daily, @weekly also work.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: report
+  namespace: lab-jobs
+  labels:
+    app: report
+spec:
+  schedule: "*/1 * * * *"
+  # Interpret the schedule in this IANA time zone. Without it, the time zone
+  # of kube-controller-manager is used (usually UTC, but don't rely on it).
+  # "CRON_TZ=..." inside schedule is NOT supported - use this field.
+  timeZone: "Etc/UTC"
+  # What if the previous Job is still running when the next run is due?
+  #   Allow   (default) - run them side by side
+  #   Forbid  - skip the new run
+  #   Replace - delete the running Job and start the new one
+  concurrencyPolicy: Forbid
+  # If a run could not start on time (controller down, Forbid blocking ...),
+  # it may still start up to this many seconds late; after that the run is
+  # counted as missed. Also avoids the "too many missed start times (> 100)"
+  # problem after long outages.
+  startingDeadlineSeconds: 30
+  # How many finished Jobs to keep (older ones are deleted with their pods).
+  successfulJobsHistoryLimit: 3      # default 3
+  failedJobsHistoryLimit: 1          # default 1
+  # suspend: true would stop new runs without deleting the CronJob.
+  jobTemplate:
+    metadata:
+      labels:
+        app: report
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 50      # never let one run overlap the next one
+      template:
+        metadata:
+          labels:
+            app: report
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: report
+              image: busybox:1.37
+              command: ["sh", "-c", "echo \"report generated at $(date -u +%H:%M:%S) by $(hostname)\""]
+              resources:
+                requests: { cpu: 10m, memory: 16Mi }
+                limits:   { cpu: 100m, memory: 32Mi }

@@ -1,0 +1,31 @@
+# 06 - ttlSecondsAfterFinished: garbage-collect the Job after it finishes.
+#
+# Finished Jobs (and their pods) stay forever by default, which clutters
+# namespaces and etcd. With a TTL, the TTL-after-finished controller deletes
+# the Job - cascading to its pods - N seconds after it completes OR fails.
+# Read the logs (or ship them to a log system) before then!
+#
+# CronJobs don't need this: they keep a fixed history instead
+# (successfulJobsHistoryLimit / failedJobsHistoryLimit, see 11).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ttl-demo
+  namespace: lab-jobs
+  labels:
+    app: ttl-demo
+spec:
+  ttlSecondsAfterFinished: 20
+  template:
+    metadata:
+      labels:
+        app: ttl-demo
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: quick
+          image: busybox:1.37
+          command: ["sh", "-c", "echo 'finished - this Job deletes itself 20s from now'"]
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 100m, memory: 32Mi }

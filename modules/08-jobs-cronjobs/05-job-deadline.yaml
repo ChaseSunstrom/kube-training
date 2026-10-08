@@ -1,0 +1,31 @@
+# 05 - activeDeadlineSeconds: a hard time limit for the WHOLE Job.
+#
+# The work takes 60s but the Job is allowed 15s in total (counted from when
+# the Job starts, across all retries). When the deadline passes, running
+# pods are terminated and the Job fails with reason DeadlineExceeded -
+# regardless of backoffLimit. Use it so a hung batch job can't run forever.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: deadline
+  namespace: lab-jobs
+  labels:
+    app: deadline
+spec:
+  activeDeadlineSeconds: 15
+  template:
+    metadata:
+      labels:
+        app: deadline
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: slow
+          image: busybox:1.37
+          # The trap makes the shell exit promptly on SIGTERM. Without it the
+          # pod would sit out the full 30s grace period - and the Job only
+          # gets its final Failed condition once its pods have terminated.
+          command: ["sh", "-c", "trap 'exit 143' TERM; echo 'this will take a minute...'; sleep 60 & wait $!; echo done"]
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 100m, memory: 32Mi }

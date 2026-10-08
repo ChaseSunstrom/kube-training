@@ -1,0 +1,47 @@
+# Default values for the webapp chart.
+#
+# Everything here can be overridden at install/upgrade time:
+#   -f my-values.yaml          (files, applied left to right)
+#   --set replicaCount=3       (single values, applied after the files)
+# `helm show values ./chart` prints this file. values.schema.json validates
+# the merged result - try `--set replicaCount=zero`.
+
+replicaCount: 2
+
+image:
+  repository: nginx
+  tag: ""                     # empty = use .Chart.AppVersion ("1.27-alpine")
+  pullPolicy: IfNotPresent
+
+# Rendered into the HTML page - change it to see an upgrade roll out.
+message: "Hello from Helm!"
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: false
+  className: ""               # e.g. "nginx" - empty = the cluster's default IngressClass
+  host: webapp.localtest.me   # *.localtest.me resolves to 127.0.0.1
+
+serviceAccount:
+  create: true
+  name: ""                    # empty = generated from the release name
+  automount: false            # nginx never talks to the Kubernetes API
+
+# Simulated database migration that runs as a pre-install/pre-upgrade hook.
+migration:
+  enabled: true
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 16Mi
+  limits:
+    cpu: 100m
+    memory: 64Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

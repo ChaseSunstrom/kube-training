@@ -1,0 +1,30 @@
+# 09 - sessionAffinity: ClientIP - "sticky" connections per client IP.
+#
+# By default every new connection may go to a different pod. With
+# ClientIP affinity, kube-proxy sends all connections from one client IP to
+# the same pod (for timeoutSeconds after the last one).
+# It is IP-based, not cookie-based: every client behind one NAT or proxy
+# lands on the same pod. Prefer stateless apps; for HTTP cookie stickiness
+# use your Ingress/Gateway controller.
+#
+#   kubectl apply -f modules/04-services/09-session-affinity.yaml
+#   kubectl exec -n lab-services client -- \
+#     sh -c 'for i in $(seq 6); do curl -s http://whoami-sticky | grep Hostname; done'
+apiVersion: v1
+kind: Service
+metadata:
+  name: whoami-sticky
+  namespace: lab-services
+  labels:
+    app: whoami
+spec:
+  selector:
+    app: whoami
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 600     # default 10800 (3h)

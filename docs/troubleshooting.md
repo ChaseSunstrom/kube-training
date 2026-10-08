@@ -2,8 +2,8 @@
 
 Start from what you **see**. Each symptom gives you the likely causes, the
 exact commands that confirm the cause, and the fix. The error messages
-quoted here were produced on the course cluster (kind, Kubernetes v1.33)
-unless they are marked *typical*. A *typical* message comes from an
+quoted here were produced on a kind cluster running Kubernetes v1.37, the
+version this course targets, unless they are marked *typical*. A *typical* message comes from an
 environment kind can't reproduce, such as cloud block storage or a private
 registry.
 
@@ -85,19 +85,21 @@ pod is scheduled but still preparing, STATUS shows `ContainerCreating` or
 `Init:…` instead.
 
 **Read the scheduler's message.** It accounts for every node. For example
-`0/3 nodes are available: 1 node(s) had untolerated taint {...}, 2 Insufficient cpu.`
-means one node is excluded by a taint and the other two lack CPU.
+`0/3 nodes are available: 1 node(s) had untolerated taint(s), 2 Insufficient cpu.`
+means one node is excluded by a taint and the other two lack CPU. (Older
+versions also name the taint, e.g.
+`had untolerated taint {node-role.kubernetes.io/control-plane: }`.)
 
 | Message (real, from kind) | Cause | Fix |
 |---|---|---|
 | `2 Insufficient cpu` / `Insufficient memory` | The pod's **requests** don't fit in what is still unrequested on any node. Usage is irrelevant: the scheduler counts requests, not live consumption. | Lower requests, free capacity, or add nodes. Compare with `kubectl describe node <n>` → *Allocated resources*. |
 | `node(s) didn't match Pod's node affinity/selector` | A `nodeSelector` or required node affinity matches no node, often a typo in the label. | `kubectl get nodes --show-labels`; fix the label or the selector ([module 10](../modules/10-scheduling/README.md)). |
-| `node(s) had untolerated taint {key: value}` | Taint without a toleration. kind's control-plane node always has `node-role.kubernetes.io/control-plane:NoSchedule`, which is why it shows up in almost every message. | Add a toleration, or schedule somewhere else. |
+| `node(s) had untolerated taint(s)` | Taint without a toleration. List the taints with the `custom-columns` command below. kind's control-plane node always has `node-role.kubernetes.io/control-plane:NoSchedule`, which is why it shows up in almost every message. | Add a toleration, or schedule somewhere else. |
 | `didn't match pod anti-affinity rules` / `didn't match pod topology spread constraints` | Not enough nodes or zones to satisfy *required* anti-affinity or `DoNotSchedule` spread. | More nodes, `preferred…` rules, or `whenUnsatisfiable: ScheduleAnyway`. |
 | `pod has unbound immediate PersistentVolumeClaims` | The PVC cannot bind (bad StorageClass, no matching PV). | See [PVC Pending](#pvc-pending). |
 | `persistentvolumeclaim "x" not found` | The pod references a claim that doesn't exist in its namespace. | Create the PVC or fix `claimName`. |
 | `node(s) didn't match PersistentVolume's node affinity` | The volume is node-local (kind's local-path, `local` PVs) and lives on a different node than the one the pod is forced onto. | Let the pod go to the volume's node, or use network storage. |
-| `node has pod using PersistentVolumeClaim with the same name and ReadWriteOncePod access mode` | A `ReadWriteOncePod` claim is already in use by another pod. This is working as designed. | Wait for, or delete, the other pod ([scenario](../scenarios/rwo-pvc-ordered-pods/README.md)). |
+| `node(s) unavailable due to PersistentVolumeClaim with ReadWriteOncePod access mode already in-use by another pod` (older versions: `node has pod using PersistentVolumeClaim with the same name and ReadWriteOncePod access mode`) | A `ReadWriteOncePod` claim is already in use by another pod. This is working as designed. | Wait for, or delete, the other pod ([scenario](../scenarios/rwo-pvc-ordered-pods/README.md)). |
 | *No events at all* | The scheduler isn't running, or `spec.schedulerName` names a scheduler that doesn't exist. | `kubectl get pods -n kube-system` (look for `kube-scheduler-*`). |
 
 ```bash
@@ -279,7 +281,7 @@ the node was short of memory, disk or PIDs, or the pod went over its own
 `ephemeral-storage` limit. The pod object stays around with phase `Failed`
 and `.status.reason: Evicted`.
 
-> In Kubernetes 1.33 the STATUS column may show **`Error`**, not `Evicted`.
+> On current versions (verified on 1.37 and 1.33) the STATUS column shows **`Error`**, not `Evicted`.
 > It shows the container's termination reason. Check `describe` instead.
 > Real output:
 >
@@ -324,7 +326,7 @@ kubectl describe pod <pod> | sed -n '/Events:/,$p'
 
 | Clue | Cause | Fix |
 |---|---|---|
-| `finalizers` is non-empty, e.g. `["example.com/block-delete"]` | A **finalizer** is waiting for a controller to finish cleanup. If that controller is gone, it never will. On 1.33 the pod may show `Completed` or `Error` once its containers stop, but the object still doesn't go away (verified). | Fix or reinstall the controller. Only if you are sure no cleanup is needed: `kubectl patch pod <pod> --type=json -p '[{"op":"remove","path":"/metadata/finalizers"}]'` |
+| `finalizers` is non-empty, e.g. `["example.com/block-delete"]` | A **finalizer** is waiting for a controller to finish cleanup. If that controller is gone, it never will. Once its containers stop, the pod may show `Completed` or `Error` instead of `Terminating`, but the object still doesn't go away (verified on 1.37). | Fix or reinstall the controller. Only if you are sure no cleanup is needed: `kubectl patch pod <pod> --type=json -p '[{"op":"remove","path":"/metadata/finalizers"}]'` |
 | Node is `NotReady` / `Unknown` | The kubelet can't confirm that the containers stopped, so the API server keeps the object. | Bring the node back, or delete the Node object. For a node that is really powered off, add the `node.kubernetes.io/out-of-service=nodeshutdown:NoExecute` taint (non-graceful shutdown). |
 | App ignores SIGTERM | It waits out the full grace period, then gets SIGKILL. It is slow but not stuck. | Handle SIGTERM, or lower `terminationGracePeriodSeconds`. |
 
@@ -344,7 +346,8 @@ e.g. a broken metrics-server (`kubectl get apiservices | grep False`).
 **What it means.** The container's main process exited with code 0. A
 standalone pod with `restartPolicy: Never` or `OnFailure` then shows
 `Completed`. Under a Deployment (`restartPolicy: Always`) it is restarted
-over and over, showing `CrashLoopBackOff` with
+over and over. STATUS alternates between `Completed` and
+`CrashLoopBackOff`, and `describe` shows
 `Last State: Terminated, Reason: Completed, Exit Code: 0` (verified).
 
 **Usual causes:**
@@ -764,7 +767,7 @@ kubectl get pod <pod> -o jsonpath='{.spec.serviceAccountName}'    # which SA doe
 | Mistake | Fix |
 |---|---|
 | Wrong `apiGroups`: Deployments are in `apps`, Ingresses in `networking.k8s.io`, Jobs in `batch` | `kubectl api-resources \| grep <kind>` shows the group. |
-| Missing subresource: `pods/log` (logs), `pods/exec`, `pods/portforward`, `deployments/scale` | Add the subresource as its own resource. For `pods/exec` and `pods/portforward` grant **both `get` and `create`**. Current kubectl connects with a WebSocket (an HTTP GET, so verb `get`, verified on 1.33); older clients use POST (`create`). |
+| Missing subresource: `pods/log` (logs), `pods/exec`, `pods/attach`, `pods/portforward`, `deployments/scale` | Add the subresource as its own resource. `kubectl exec`, `attach` and `port-forward` need the verb **`create`**. On 1.37, a Role with only `get` on `pods/exec` fails with `cannot create resource "pods/exec"` (verified). Some older clusters let WebSocket connections through with `get`, so grant `get` and `create` if you also support old clusters. |
 | Missing verb: `watch` (for `-w`), `list` vs `get`, `patch` for `kubectl apply` | Add the verb. |
 | Binding in the wrong namespace, or a typo in the subject's name or namespace | A RoleBinding grants only in its own namespace. |
 | Cluster-scoped resource (nodes, PVs, namespaces) granted with a Role | Needs a ClusterRole **and** a ClusterRoleBinding. |

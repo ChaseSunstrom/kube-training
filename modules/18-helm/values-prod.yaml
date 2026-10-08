@@ -1,0 +1,34 @@
+# Production overrides for the webapp chart.
+#
+#   helm upgrade hello ./modules/18-helm/chart -n lab-helm -f modules/18-helm/values-prod.yaml
+#
+# Only list what DIFFERS from chart/values.yaml - Helm deep-merges this file
+# over the chart defaults (maps are merged key by key; lists are replaced
+# as a whole). Later -f files and --set flags win over earlier ones.
+replicaCount: 3
+
+message: "Hello from PRODUCTION"
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 32Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi
+
+# Spread replicas across the two zones of the training cluster.
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          topologyKey: training/zone
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: webapp
+
+ingress:
+  enabled: true
+  className: nginx            # module 12's ingress-nginx; any IngressClass works
+  host: webapp.localtest.me

@@ -1,0 +1,8 @@
+# Namespace for module 04 (services).
+#   kubectl delete namespace lab-services   # removes everything in this module
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-services
+  labels:
+    app: services

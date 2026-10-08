@@ -1,0 +1,42 @@
+# 07 - An Indexed Job: every pod knows WHICH piece of work it owns.
+#
+# completionMode: Indexed gives each pod an index 0 .. completions-1:
+#   * env var JOB_COMPLETION_INDEX (set automatically)
+#   * label AND annotation batch.kubernetes.io/job-completion-index
+#   * pod hostname <job-name>-<index> (stable DNS if you also create a
+#     headless Service and set spec.subdomain - used by MPI/ML workloads)
+# The Job is complete when EVERY index has one succeeded pod. A failed index
+# is retried with the same index.
+#
+# Typical use: "process shard N of a dataset", "render frame range N",
+# "test partition N of a test suite" - static partitioning with no queue.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: indexed
+  namespace: lab-jobs
+  labels:
+    app: indexed
+spec:
+  completionMode: Indexed
+  completions: 5
+  parallelism: 5
+  template:
+    metadata:
+      labels:
+        app: indexed
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: worker
+          image: busybox:1.37
+          command:
+            - sh
+            - -c
+            - |
+              set -- apple banana cherry date elderberry   # the "dataset"
+              shift "$JOB_COMPLETION_INDEX"
+              echo "index $JOB_COMPLETION_INDEX on $(hostname) processes: $1"
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 100m, memory: 32Mi }

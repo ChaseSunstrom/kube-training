@@ -1,0 +1,55 @@
+{{- /*
+A HOOK: Helm runs this Job at a specific point of the release lifecycle
+instead of together with the other objects.
+
+  pre-install,pre-upgrade  run before the chart's normal objects are
+                           created/updated; Helm WAITS for the Job to finish
+                           and aborts the install/upgrade if it fails.
+  hook-weight              order between several hooks of the same kind (lower first)
+  hook-delete-policy       before-hook-creation: delete the previous run's Job
+                           when the hook runs again (so you can still read the
+                           last run's logs in between).
+
+Hook objects are NOT part of the release's managed objects: `helm uninstall`
+leaves them behind (delete the namespace, or add hook-succeeded to the
+delete policy).
+*/ -}}
+{{- if .Values.migration.enabled -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "webapp.fullname" . }}-migrate
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "webapp.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        app: {{ include "webapp.fullname" . }}-migrate
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "webapp.podSecurityContext" . | nindent 8 }}
+      containers:
+        - name: migrate
+          image: busybox:1.37
+          command:
+            - sh
+            - -c
+            - |
+              echo "release {{ .Release.Name }} revision {{ .Release.Revision }}: migrating schema for app {{ .Chart.AppVersion }} ..."
+              sleep 3
+              echo "migration done"
+          securityContext:
+            {{- include "webapp.containerSecurityContext" . | nindent 12 }}
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 50m, memory: 32Mi }
+{{- end }}

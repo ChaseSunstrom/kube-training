@@ -1,0 +1,89 @@
+# 10 - Canary: a small number of new-version pods next to the stable ones.
+#
+# Both Deployments carry app=api; the Service (11) selects only app=api, so
+# it balances over ALL 5 pods: ~4/5 of requests hit stable, ~1/5 the canary.
+# If the canary looks good, roll the new version out to `api-stable` and
+# scale the canary to 0; if not, delete the canary - 80% of users never saw it.
+#
+#   kubectl apply -f modules/03-deployments/10-canary.yaml
+#   kubectl get pods -n lab-deployments -l app=api -L track
+#
+# Limitation: the split is only as fine as the replica ratio (1 of 5 = 20%),
+# and it is per connection, not per user. For "send 1% of traffic" or
+# "only users with this header", use weighted routing in the Gateway API
+# (module 12), a service mesh, or a progressive-delivery tool.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-stable
+  namespace: lab-deployments
+  labels:
+    app: api
+    track: stable
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: api
+      track: stable
+  template:
+    metadata:
+      labels:
+        app: api
+        track: stable
+    spec:
+      containers:
+        - name: whoami
+          image: traefik/whoami:v1.10
+          env:
+            - name: WHOAMI_NAME
+              value: "api stable (v1)"
+          ports:
+            - name: http
+              containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 2
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 100m, memory: 32Mi }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-canary
+  namespace: lab-deployments
+  labels:
+    app: api
+    track: canary
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api
+      track: canary
+  template:
+    metadata:
+      labels:
+        app: api
+        track: canary
+    spec:
+      containers:
+        - name: whoami
+          image: traefik/whoami:v1.10
+          env:
+            - name: WHOAMI_NAME
+              value: "api canary (v2)"
+          ports:
+            - name: http
+              containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 2
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 100m, memory: 32Mi }

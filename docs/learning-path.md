@@ -82,7 +82,9 @@ module 04's namespace first if it still uses NodePort 30080.)
 2. **web:** a Deployment with 3 replicas of `nginx:1.27-alpine`. One
    ConfigMap provides `index.html`. Another provides a `default.conf` that
    serves the page and proxies `/api/` to `http://api/`. Expose it with a
-   NodePort Service on `nodePort: 30080`.
+   NodePort Service on `nodePort: 30080`. Hint: nginx looks up `api` when
+   it starts. If that Service doesn't exist yet, nginx exits with
+   `host not found in upstream`, so create the api first.
 3. Store a fake API key in a Secret and mount it read-only at `/etc/api/key`
    in the api pods.
 4. Every container gets requests, limits and a readiness probe. Add a
@@ -436,7 +438,7 @@ your own. **No** = not in this course; study it elsewhere.
 | | Create and manage clusters with kubeadm | **No.** kind uses kubeadm internally, but you never run it yourself. |
 | | Manage the cluster lifecycle (e.g. upgrades) | **No** |
 | | Highly-available control plane | **No** |
-| | Helm and Kustomize to install cluster components | Yes (12, 14, 17, 18) |
+| | Helm and Kustomize to install cluster components | Yes (17, 18) |
 | | Extension interfaces (CNI, CSI, CRI) | Partly (concepts in 06, 13 and the [glossary](glossary.md)) |
 | | CRDs; install and configure operators | Partly (12). Install a real operator on your own, see [Where to go next](#where-to-go-next). |
 | Services and Networking (20%) | Connectivity between Pods | Yes (04, 13) |

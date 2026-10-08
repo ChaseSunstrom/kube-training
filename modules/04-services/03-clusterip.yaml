@@ -1,0 +1,26 @@
+# 03 - ClusterIP: the default Service type.
+#
+# Gives the set of pods matching `selector` ONE stable virtual IP and DNS name
+# (whoami.lab-services.svc.cluster.local), reachable only from inside the
+# cluster. kube-proxy on every node turns "connect to ClusterIP:port" into
+# "connect to one READY pod IP:targetPort", chosen at random per connection.
+#
+#   kubectl apply -f modules/04-services/03-clusterip.yaml
+#   kubectl get service whoami -n lab-services
+#   kubectl get endpointslices -n lab-services -l kubernetes.io/service-name=whoami
+apiVersion: v1
+kind: Service
+metadata:
+  name: whoami
+  namespace: lab-services
+  labels:
+    app: whoami
+spec:
+  type: ClusterIP               # the default; written out for clarity
+  selector:
+    app: whoami                 # equality-based only (no matchExpressions for Services)
+  ports:
+    - name: http                # port names are needed once a Service has >1 port
+      protocol: TCP
+      port: 80                  # the port clients use on the Service IP
+      targetPort: http          # the container port, BY NAME (see 01-whoami-deployment.yaml)

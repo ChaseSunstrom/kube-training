@@ -1,0 +1,26 @@
+# 06 - ExternalName: a DNS alias (CNAME), nothing else.
+#
+# No selector, no endpoints, no proxying: CoreDNS simply answers
+# "whoami-alias.lab-services.svc.cluster.local is a CNAME for <externalName>".
+# Typical uses:
+#   * give an external dependency a cluster-local name, so apps use
+#     `db` today and you can move the DB into the cluster later without
+#     changing app config (externalName: mydb.abc123.eu-west-1.rds.amazonaws.com);
+#   * alias a Service in another namespace (this example).
+#
+# Caveats: it only works for DNS-based clients; HTTP Host headers and TLS
+# SNI still carry the alias name, which external servers may reject; and
+# externalName must be a hostname, not an IP (use 07 + 08 for an IP).
+#
+#   kubectl apply -f modules/04-services/06-externalname.yaml
+#   kubectl exec -n lab-services client -- dig whoami-alias.lab-services.svc.cluster.local
+apiVersion: v1
+kind: Service
+metadata:
+  name: whoami-alias
+  namespace: lab-services
+  labels:
+    app: whoami
+spec:
+  type: ExternalName
+  externalName: whoami.lab-services.svc.cluster.local
