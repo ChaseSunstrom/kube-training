@@ -1,0 +1,44 @@
+# Solution to exercise 5 - tolerate every taint, like kube-proxy and kindnet.
+#
+# A toleration with only "operator: Exists" (no key, no effect) matches ALL
+# taints: NoSchedule, PreferNoSchedule and NoExecute. The pod runs on every
+# node - control plane, cordoned nodes, nodes under disk/memory pressure,
+# nodes with custom "dedicated=..." taints - and is never evicted by a
+# NoExecute taint.
+#
+# That is right for the agents a node cannot work without (network proxy,
+# CNI, CSI node plugin), which also use priorityClassName:
+# system-node-critical so they are the last to be evicted under pressure.
+# For anything else it is wrong: it defeats every taint an admin sets to keep
+# workloads off a node (maintenance, dedicated hardware, a broken node).
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: everywhere-agent
+  namespace: lab-daemonsets
+  labels:
+    app: everywhere-agent
+spec:
+  selector:
+    matchLabels:
+      app: everywhere-agent
+  template:
+    metadata:
+      labels:
+        app: everywhere-agent
+    spec:
+      terminationGracePeriodSeconds: 5
+      tolerations:
+        - operator: Exists
+      containers:
+        - name: agent
+          image: busybox:1.37
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          command: ["sh", "-c", "trap 'exit 0' TERM; echo \"everywhere-agent on $NODE_NAME\"; sleep 36000 & wait $!"]
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 50m, memory: 32Mi }

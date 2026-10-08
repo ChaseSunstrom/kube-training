@@ -9,7 +9,7 @@
 #      (default 30s, counted from step 2!) runs out, it gets SIGKILL.
 #
 # Two pods show the good and the bad case:
-#   graceful - has a preStop hook and a SIGTERM handler: exits cleanly in ~8s.
+#   graceful - has a preStop hook and a SIGTERM handler: exits cleanly in ~8-10s.
 #   stubborn - PID 1 is `sleep`, which has no SIGTERM handler. The kernel
 #              never applies a default "terminate" action to PID 1 of a
 #              namespace, so SIGTERM is ignored and the kubelet must wait
@@ -19,7 +19,7 @@
 #   # terminal 1:
 #   kubectl logs -f graceful -n lab-pods
 #   # terminal 2:
-#   time kubectl delete pod graceful -n lab-pods      # ~8s
+#   time kubectl delete pod graceful -n lab-pods      # ~8-10s
 #   time kubectl delete pod stubborn -n lab-pods      # ~10s = the whole grace period
 apiVersion: v1
 kind: Pod
@@ -53,7 +53,7 @@ spec:
           # Runs BEFORE SIGTERM. Classic use: sleep a few seconds so load
           # balancers and kube-proxy stop sending new requests first.
           # Writing to /proc/1/fd/1 makes the message show up in `kubectl logs`.
-          # (Kubernetes 1.33 also has a built-in `sleep: {seconds: 5}` action.)
+          # (There is also a built-in action for the plain wait: `preStop: {sleep: {seconds: 5}}`.)
           exec:
             command: ["sh", "-c", "echo \"$(date +%T) preStop hook: draining for 5s\" > /proc/1/fd/1; sleep 5"]
       resources:

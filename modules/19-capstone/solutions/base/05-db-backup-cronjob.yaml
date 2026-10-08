@@ -45,7 +45,9 @@ spec:
                 - |
                   set -eu
                   file="/backups/capstone-$(date -u +%Y%m%dT%H%M%SZ).sql.gz"
-                  pg_dump --no-owner | gzip > "$file.tmp"
+                  # --clean --if-exists: the dump starts with DROP ... IF EXISTS, so it
+                  # can be restored over an existing database (see extras/restore-job.yaml)
+                  pg_dump --no-owner --clean --if-exists | gzip > "$file.tmp"
                   mv "$file.tmp" "$file"          # never leave a half-written dump with the final name
                   echo "backup written: $file ($(wc -c < "$file") bytes)"
                   ls -1t /backups/*.sql.gz | tail -n +6 | xargs -r rm -f --

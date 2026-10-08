@@ -1,0 +1,13 @@
+# Module 14 - Autoscaling
+#
+# Everything namespaced lives in lab-autoscaling. metrics-server (a cluster
+# add-on in kube-system) is installed separately with
+#   kubectl apply -k modules/14-autoscaling/metrics-server/
+# Cleanup: kubectl delete namespace lab-autoscaling  (+ see the README for
+# removing metrics-server, if you want to).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-autoscaling
+  labels:
+    app: lab-autoscaling

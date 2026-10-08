@@ -1,0 +1,147 @@
+# 02 - Three backends to route to.
+#
+#   whoami   traefik/whoami - prints the request it received (handy to see
+#            which Host/path/headers arrived and which pod answered)
+#   echo-v1  hashicorp/http-echo answering "echo v1"
+#   echo-v2  hashicorp/http-echo answering "echo v2"  (the "canary")
+#
+# Plain ClusterIP Services: Ingress/Gateway controllers route to Services
+# (Traefik actually sends traffic straight to the pod IPs it finds in the
+# Services' EndpointSlices).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: whoami
+  namespace: lab-ingress
+  labels:
+    app: whoami
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: whoami
+  template:
+    metadata:
+      labels:
+        app: whoami
+    spec:
+      containers:
+        - name: whoami
+          image: traefik/whoami:v1.10
+          ports:
+            - name: http
+              containerPort: 80
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 100m, memory: 32Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: whoami
+  namespace: lab-ingress
+  labels:
+    app: whoami
+spec:
+  selector:
+    app: whoami
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: echo-v1
+  namespace: lab-ingress
+  labels:
+    app: echo
+    version: v1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: echo
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: echo
+        version: v1
+    spec:
+      containers:
+        - name: echo
+          image: hashicorp/http-echo:1.0
+          args: ["-listen=:5678", "-text=echo v1"]
+          ports:
+            - name: http
+              containerPort: 5678
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 100m, memory: 32Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: echo-v1
+  namespace: lab-ingress
+  labels:
+    app: echo
+    version: v1
+spec:
+  selector:
+    app: echo
+    version: v1
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: echo-v2
+  namespace: lab-ingress
+  labels:
+    app: echo
+    version: v2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: echo
+      version: v2
+  template:
+    metadata:
+      labels:
+        app: echo
+        version: v2
+    spec:
+      containers:
+        - name: echo
+          image: hashicorp/http-echo:1.0
+          args: ["-listen=:5678", "-text=echo v2"]
+          ports:
+            - name: http
+              containerPort: 5678
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 100m, memory: 32Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: echo-v2
+  namespace: lab-ingress
+  labels:
+    app: echo
+    version: v2
+spec:
+  selector:
+    app: echo
+    version: v2
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

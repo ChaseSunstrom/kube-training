@@ -1,0 +1,28 @@
+# 10 - Allow frontend to OPEN connections to backend on port 80.
+#
+# With default-deny on both directions, a connection needs TWO permissions:
+#   egress  on the client side   (this file:  frontend -> backend:80)
+#   ingress on the server side   (04:         backend <- frontend:80)
+# Either one missing = blocked. When a connection is blocked, check both
+# namespaces' policies.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: frontend-allow-egress-to-backend
+  namespace: lab-netpol
+  labels:
+    app: frontend
+spec:
+  podSelector:
+    matchLabels:
+      app: frontend
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: backend
+      ports:
+        - protocol: TCP
+          port: 80

@@ -73,7 +73,7 @@ Volume files are written by the kubelet. It writes the new version into a
 fresh timestamped directory, then atomically repoints a `..data` symlink to it,
 so your app never sees a half-written file. The kubelet does this on its
 periodic pod sync, so the total delay is the kubelet sync period (1 minute by
-default) plus a little cache delay. In this lab it took 37–67 seconds.
+default) plus a little cache delay. In this lab it took 30–70 seconds.
 
 **Why subPath doesn't update.** A `subPath` mount bind-mounts the single file
 that existed when the container started. It never follows the `..data`
@@ -574,11 +574,15 @@ kubectl exec -n lab-config projected-demo -- ls /var/run/secrets/kubernetes.io/s
 ls: /var/run/secrets/kubernetes.io/serviceaccount: No such file or directory
 ```
 
-Decode the payload, the middle part of the JWT, of the token we did ask for:
+Decode the payload, the middle part of the JWT, of the token we did ask for.
+JWTs use unpadded base64url, so first translate the alphabet and restore the
+`=` padding:
 
 ```bash
-kubectl exec -n lab-config projected-demo -- sh -c \
-  "cut -d. -f2 /etc/bundle/token | tr '_-' '/+' | base64 -d 2>/dev/null"; echo
+kubectl exec -n lab-config projected-demo -- sh -c '
+  p=$(cut -d. -f2 /etc/bundle/token | tr "_-" "/+")
+  while [ $(( ${#p} % 4 )) -ne 0 ]; do p="$p="; done
+  echo "$p" | base64 -d'; echo
 ```
 
 ```json
@@ -637,7 +641,7 @@ pod and node it was issued for. The kubelet refreshes it before it expires
 6. **Secret rotation.** Change the password in `db-creds`
    (`kubectl patch secret db-creds -n lab-config --type merge -p '{"stringData":{"password":"rotated-123"}}'`)
    and time how long `/etc/db/password` in `secret-demo` takes to change
-   (about 40 seconds here). Would an env var taken from the Secret (like
+   (30–40 seconds here). Would an env var taken from the Secret (like
    `DB_USER`) change too? What does your
    application have to do so that a rotated database password actually takes
    effect without downtime?

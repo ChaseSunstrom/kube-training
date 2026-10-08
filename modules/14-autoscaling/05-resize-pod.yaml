@@ -1,0 +1,38 @@
+# 05 - In-place pod resize: change a running pod's CPU/memory WITHOUT
+# recreating it (the "vertical" direction, done by hand).
+#
+# Resize goes through the pod's "resize" subresource:
+#   kubectl -n lab-autoscaling patch pod resize-demo --subresource resize --patch \
+#     '{"spec":{"containers":[{"name":"app","resources":{"requests":{"cpu":"200m"},"limits":{"cpu":"400m"}}}]}}'
+#
+# resizePolicy says, per resource, whether the container must restart to
+# apply a change:
+#   cpu:    NotRequired      -> the kubelet just updates the cgroup
+#   memory: RestartContainer -> e.g. for apps that size heaps at startup
+# The QoS class can't change by resizing (this pod is Burstable and stays
+# Burstable).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: resize-demo
+  namespace: lab-autoscaling
+  labels:
+    app: resize-demo
+spec:
+  terminationGracePeriodSeconds: 1
+  containers:
+    - name: app
+      image: busybox:1.37
+      command: ["sh", "-c", "while true; do sleep 3600; done"]
+      resizePolicy:
+        - resourceName: cpu
+          restartPolicy: NotRequired
+        - resourceName: memory
+          restartPolicy: RestartContainer
+      resources:
+        requests:
+          cpu: 100m
+          memory: 32Mi
+        limits:
+          cpu: 200m
+          memory: 64Mi

@@ -1,0 +1,36 @@
+# Solution to exercise 3 - a DaemonSet for nodes that don't exist (yet).
+#
+# No node carries training/gpu=true, so DESIRED is 0 and no pod is created.
+# The DaemonSet keeps watching: label a node and a pod appears on it within
+# seconds; remove the label and the pod is deleted. On YOUR OWN cluster try:
+#   kubectl label node kube-training-worker2 training/gpu=true
+#   kubectl get pods -n lab-daemonsets -l app=gpu-agent -o wide
+#   kubectl label node kube-training-worker2 training/gpu-        # remove it again
+# This is how GPU device plugins and other hardware agents follow the
+# hardware around.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: gpu-agent
+  namespace: lab-daemonsets
+  labels:
+    app: gpu-agent
+spec:
+  selector:
+    matchLabels:
+      app: gpu-agent
+  template:
+    metadata:
+      labels:
+        app: gpu-agent
+    spec:
+      terminationGracePeriodSeconds: 5
+      nodeSelector:
+        training/gpu: "true"
+      containers:
+        - name: agent
+          image: busybox:1.37
+          command: ["sh", "-c", "trap 'exit 0' TERM; echo 'pretending to manage a GPU'; sleep 36000 & wait $!"]
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 50m, memory: 32Mi }

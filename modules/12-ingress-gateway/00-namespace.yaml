@@ -1,0 +1,17 @@
+# Module 12 - Ingress & Gateway API
+#
+# Everything namespaced lives in lab-ingress: the Traefik controller (01),
+# the demo backends (02), Ingresses, the Gateway and its HTTPRoutes.
+# (In production the controller usually gets its own namespace, e.g.
+# "traefik", owned by the platform team - Gateway API is designed around
+# exactly that split; see the README.)
+#
+# Cleanup: kubectl delete namespace lab-ingress  + the cluster-scoped objects
+# listed in the README (ClusterRole/Binding, IngressClass, GatewayClass,
+# Gateway API CRDs).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-ingress
+  labels:
+    app: lab-ingress

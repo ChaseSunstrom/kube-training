@@ -1,0 +1,45 @@
+# 02 - The same agent, but also on the control-plane node.
+#
+# Taints repel pods; tolerations let a pod ignore a specific taint. kind's
+# control-plane node carries:
+#   node-role.kubernetes.io/control-plane:NoSchedule
+# Tolerating it lets the DaemonSet place a pod there too: 3 pods instead
+# of 2. Cluster-level agents (kube-proxy, CNI, log shippers) do this because
+# the control-plane nodes need networking and logging as well.
+#
+# Note: tolerating a taint does not ATTRACT the pod to that node, it only
+# stops the taint from blocking it. Targeting is done with nodeSelector /
+# node affinity (03).
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: node-agent-all
+  namespace: lab-daemonsets
+  labels:
+    app: node-agent-all
+spec:
+  selector:
+    matchLabels:
+      app: node-agent-all
+  template:
+    metadata:
+      labels:
+        app: node-agent-all
+    spec:
+      terminationGracePeriodSeconds: 5
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: agent
+          image: busybox:1.37
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          command: ["sh", "-c", "trap 'exit 0' TERM; echo \"agent on $NODE_NAME\"; sleep 36000 & wait $!"]
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 50m, memory: 32Mi }

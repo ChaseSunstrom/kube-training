@@ -1,0 +1,64 @@
+# Solution to exercise 3: 01-app.yaml WITHOUT spec.replicas.
+#
+# Removing the field from the manifest is not enough with client-side
+# `kubectl apply`: "replicas: 1" is still recorded in the last-applied
+# annotation, so the next apply DELETES the field and the API server
+# defaults it to 1 - your HPA-scaled Deployment drops to one pod.
+# Do the hand-over once, then apply this file as often as you like:
+#   kubectl apply set-last-applied -f modules/14-autoscaling/solutions/03-web-without-replicas.yaml
+#   kubectl apply -f modules/14-autoscaling/solutions/03-web-without-replicas.yaml
+# or switch to server-side apply, where field ownership is tracked per field
+# and the HPA (which writes through the /scale subresource) keeps replicas:
+#   kubectl apply --server-side -f modules/14-autoscaling/solutions/03-web-without-replicas.yaml
+#
+# 01 - The workload we autoscale: "web", a small HTTP server.
+#
+# traefik/whoami's /data endpoint generates a response of the requested size,
+# so every request costs a little CPU - enough for a load generator to push
+# the pods well past their CPU request.
+#
+# The one thing HPA needs from this manifest: resources.requests.cpu.
+# CPU *utilization* = current CPU usage / REQUESTED CPU. Without a request
+# there is nothing to divide by, and the HPA reports
+#   "failed to get cpu utilization: missing request for cpu"
+# (same for memory utilization and memory requests).
+#
+# replicas: 1 here is only the starting point. Once an HPA manages this
+# Deployment, the HPA owns spec.replicas, and every `kubectl apply` of this
+# file resets it to 1 for a moment - Exercise 3 shows how to hand the field
+# over to the HPA properly.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: lab-autoscaling
+  labels:
+    app: web
+spec:
+  # no replicas: the HPA decides
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+        - name: whoami
+          image: traefik/whoami:v1.10
+          ports:
+            - name: http
+              containerPort: 80
+          resources:
+            requests:
+              cpu: 50m          # 100% utilization = 50 millicores
+              memory: 16Mi
+            limits:
+              cpu: 200m         # keeps one pod from eating a whole laptop core
+              memory: 64Mi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5

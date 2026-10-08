@@ -1,0 +1,26 @@
+# 08 - Default deny ALL egress in lab-netpol.
+#
+# Same idea as 03, but for OUTGOING traffic: every pod in lab-netpol becomes
+# "isolated for egress" and may only open connections that some policy
+# allows.
+#
+# THE DNS GOTCHA: "everything" includes DNS. Pods resolve Service names via
+# CoreDNS (the kube-dns Service in kube-system, UDP+TCP port 53). With this
+# policy alone, even `curl http://backend` from inside lab-netpol fails -
+# not because of the backend, but because the name can't be resolved.
+# 09 fixes that.
+#
+# Replies to connections that are allowed IN (backend answering frontend) are
+# not affected: policies are stateful and only look at who opened the
+# connection.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-egress
+  namespace: lab-netpol
+  labels:
+    app: lab-netpol
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress

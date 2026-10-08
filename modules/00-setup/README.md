@@ -38,6 +38,18 @@ The control-plane node carries the taint
 `node-role.kubernetes.io/control-plane:NoSchedule`, so your workloads land on
 the two workers (module 10 explains taints).
 
+[`cluster/kind-multi-node.yaml`](../../cluster/kind-multi-node.yaml) is short; read it. It is a
+kind `Cluster` object with a list of `nodes`, each with a `role`
+(`control-plane` or `worker`) and optionally:
+
+* `labels:` – Kubernetes node labels kind applies when the node joins. The
+  control plane gets `ingress-ready: "true"` (the ingress module schedules its
+  controller there), the workers get `training/zone: zone-a` / `zone-b` (used
+  to demonstrate zone-aware scheduling). See them with `kubectl get nodes --show-labels`.
+* `extraPortMappings:` – publish a port of the node *container* on your
+  machine, like `docker run -p`. The control plane publishes 80, 443 (ingress)
+  and 30080 (the NodePort used in module 04).
+
 ### The control plane and node components
 
 | Component | Runs as (in kind) | What it does |
@@ -124,9 +136,10 @@ You need **a container engine**, **kubectl** and **kind**. Budget at least
 **4 GB of RAM and 2 CPUs** for the container engine (6–8 GB is comfortable);
 if your machine has less, use the single-node cluster in step 2.
 
-The course is tested with **Kubernetes v1.33** (kind v0.29.0, kubectl v1.33.x).
-Newer versions are fine, but keep `kubectl` within **one minor version** of
-the cluster – that is the official version-skew policy.
+The course targets **Kubernetes 1.37** (kind v0.33.0, whose default node
+image is `kindest/node:v1.37.0`, and kubectl v1.37.x). Other versions mostly
+work, but keep `kubectl` within **one minor version** of the cluster – that
+is the official version-skew policy.
 
 <details open>
 <summary><b>Linux (incl. WSL2)</b></summary>
@@ -138,15 +151,21 @@ sudo usermod -aG docker "$USER"      # then log out and back in, so you don't ne
 docker run --rm busybox:1.37 echo docker works
 
 # --- kubectl (pinned to the course version; use arm64 instead of amd64 on ARM machines)
-curl -LO "https://dl.k8s.io/release/v1.33.4/bin/linux/amd64/kubectl"
-curl -LO "https://dl.k8s.io/release/v1.33.4/bin/linux/amd64/kubectl.sha256"
+curl -LO "https://dl.k8s.io/release/v1.37.1/bin/linux/amd64/kubectl"
+curl -LO "https://dl.k8s.io/release/v1.37.1/bin/linux/amd64/kubectl.sha256"
 echo "$(cat kubectl.sha256)  kubectl" | sha256sum --check      # must print: kubectl: OK
 sudo install -m 0755 kubectl /usr/local/bin/kubectl && rm kubectl kubectl.sha256
 
 # --- kind
-curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.29.0/kind-linux-amd64
+curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.33.0/kind-linux-amd64
 sudo install -m 0755 kind /usr/local/bin/kind && rm kind
 ```
+
+Kubernetes 1.37 expects a **cgroup v2** host – recent kubelets refuse to
+start on cgroup v1 by default, and kind warns that cgroup v1 support is going
+away. Check with `stat -fc %T /sys/fs/cgroup/`: it must print `cgroup2fs`
+(all current distributions do; very old ones such as Ubuntu 20.04 or
+CentOS 7 print `tmpfs` and need an upgrade).
 
 Multi-node kind clusters on Linux can hit the default inotify limits
 (symptom: pods fail with "too many open files"). Raise them once:
@@ -170,13 +189,13 @@ sudo sysctl --system
 #     or Podman (see below).
 
 # --- kubectl, pinned (Apple Silicon = arm64, Intel = amd64)
-curl -LO "https://dl.k8s.io/release/v1.33.4/bin/darwin/arm64/kubectl"
+curl -LO "https://dl.k8s.io/release/v1.37.1/bin/darwin/arm64/kubectl"
 chmod +x kubectl && sudo mv kubectl /usr/local/bin/kubectl
 #     (`brew install kubectl` gives you the newest kubectl; fine only if your
 #      cluster is within one minor version of it)
 
 # --- kind
-brew install kind        # or: curl -Lo kind https://kind.sigs.k8s.io/dl/v0.29.0/kind-darwin-arm64
+brew install kind        # or: curl -Lo kind https://kind.sigs.k8s.io/dl/v0.33.0/kind-darwin-arm64
 ```
 </details>
 
@@ -222,7 +241,7 @@ cluster, but READMEs assume kind's node names, labels and port mappings.
 
 | | minikube | k3d (k3s in Docker) |
 |---|---|---|
-| Create a similar cluster | `minikube start -p kube-training --driver=docker --nodes=3 --kubernetes-version=v1.33.1` | `k3d cluster create kube-training --agents 2 --image rancher/k3s:v1.33.1-k3s1 -p "30080:30080@server:0"` |
+| Create a similar cluster | `minikube start -p kube-training --driver=docker --nodes=3 --kubernetes-version=v1.37.0` (if your minikube release supports it) | `k3d cluster create kube-training --agents 2 -p "30080:30080@server:0"` (choose the Kubernetes version with `--image rancher/k3s:<tag>`) |
 | Reach NodePort 30080 | `minikube -p kube-training service <svc> -n <ns> --url` | `http://localhost:30080` (thanks to `-p`) |
 | Default StorageClass | `standard` (hostpath, binds immediately) | `local-path` – edit `storageClassName` in module 06 |
 | Differences to watch | no `training/zone` labels: add them with `kubectl label node` | ships Traefik ingress + a LoadBalancer implementation (servicelb) and flannel CNI |
@@ -246,7 +265,7 @@ kind create cluster --config cluster/kind-multi-node.yaml
 
 ```
 Creating cluster "kube-training" ...
- ✓ Ensuring node image (kindest/node:v1.33.1) 🖼
+ ✓ Ensuring node image (kindest/node:v1.37.0) 🖼
  ✓ Preparing nodes 📦 📦 📦
  ✓ Writing configuration 📜
  ✓ Starting control-plane 🕹️
@@ -257,8 +276,8 @@ Set kubectl context to "kind-kube-training"
 ```
 
 * The first run downloads the ~450 MB node image; later runs take ~1 minute.
-* Using a newer kind, but want exactly the tested Kubernetes version? Add
-  `--image kindest/node:v1.33.1`.
+* Using a different kind release, but want exactly the targeted Kubernetes
+  version? Add `--image kindest/node:v1.37.0`.
 * "address already in use" → something on your machine already listens on
   port 80, 443 or 30080. Stop it, or (temporarily) delete those
   `extraPortMappings` from a *copy* of the config.
@@ -281,9 +300,9 @@ kubectl get nodes -o wide
 
 ```
 NAME                          STATUS   ROLES           AGE   VERSION   INTERNAL-IP   ...   CONTAINER-RUNTIME
-kube-training-control-plane   Ready    control-plane   9m    v1.33.1   172.18.0.4    ...   containerd://2.1.1
-kube-training-worker          Ready    <none>          8m    v1.33.1   172.18.0.3    ...   containerd://2.1.1
-kube-training-worker2         Ready    <none>          8m    v1.33.1   172.18.0.2    ...   containerd://2.1.1
+kube-training-control-plane   Ready    control-plane   31m   v1.37.0   172.18.0.4    ...   containerd://2.3.4
+kube-training-worker          Ready    <none>          31m   v1.37.0   172.18.0.3    ...   containerd://2.3.4
+kube-training-worker2         Ready    <none>          31m   v1.37.0   172.18.0.2    ...   containerd://2.3.4
 ```
 
 Nodes are `NotReady` for the first ~20 seconds, until the CNI plugin is
@@ -296,7 +315,7 @@ bash modules/00-setup/check-setup.sh
 ```
 4. Cluster
   [ ok ] current context is kind-kube-training
-  [ ok ] server version v1.33.1
+  [ ok ] server version v1.37.0
   [ ok ] kubectl/server skew is 0 minor version(s)
   [ ok ] 3/3 nodes Ready
   [ ok ] all kube-system pods Running
@@ -325,7 +344,7 @@ CURRENT   NAME                 CLUSTER              AUTHINFO             NAMESPA
 clusters:
 - cluster:
     certificate-authority-data: DATA+OMITTED
-    server: https://127.0.0.1:33945        # kind publishes the API server on a random localhost port
+    server: https://127.0.0.1:39241        # kind publishes the API server on a random localhost port
   name: kind-kube-training
 contexts:
 - context:
@@ -476,7 +495,6 @@ kubectl run demo --image=nginx:1.27-alpine -n lab-setup --dry-run=client -o yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  creationTimestamp: null
   labels:
     app: demo
   name: demo
@@ -489,7 +507,7 @@ spec:
   ...
 ```
 
-Nothing is sent to the cluster. Delete the `creationTimestamp: null`,
+Nothing is sent to the cluster. Delete the `strategy: {}`,
 `resources: {}` and `status: {}` noise, add resources/probes, and you have a
 real manifest. Two related tools:
 
@@ -600,14 +618,14 @@ kubectl get events -n lab-setup --sort-by=.metadata.creationTimestamp \
 
 ```
 WHO                     REASON              OBJECT                   MESSAGE
-deployment-controller   ScalingReplicaSet   hello                    Scaled up replica set hello-6d74479b95 from 0 to 2
-replicaset-controller   SuccessfulCreate    hello-6d74479b95         Created pod: hello-6d74479b95-bcvl5
-default-scheduler       Scheduled           hello-6d74479b95-bcvl5   Successfully assigned lab-setup/hello-6d74479b95-bcvl5 to kube-training-worker
-default-scheduler       Scheduled           hello-6d74479b95-wxb8l   Successfully assigned lab-setup/hello-6d74479b95-wxb8l to kube-training-worker2
-replicaset-controller   SuccessfulCreate    hello-6d74479b95         Created pod: hello-6d74479b95-wxb8l
-kubelet                 Pulled              hello-6d74479b95-bcvl5   Container image "traefik/whoami:v1.10" already present on machine
-kubelet                 Created             hello-6d74479b95-bcvl5   Created container: whoami
-kubelet                 Started             hello-6d74479b95-bcvl5   Started container whoami
+deployment-controller   ScalingReplicaSet   hello                    Scaled up replica set hello-777bd99564 from 0 to 2
+replicaset-controller   SuccessfulCreate    hello-777bd99564         Created pod: hello-777bd99564-pbrps
+replicaset-controller   SuccessfulCreate    hello-777bd99564         Created pod: hello-777bd99564-55ngt
+default-scheduler       Scheduled           hello-777bd99564-55ngt   Successfully assigned lab-setup/hello-777bd99564-55ngt to kube-training-worker2
+default-scheduler       Scheduled           hello-777bd99564-pbrps   Successfully assigned lab-setup/hello-777bd99564-pbrps to kube-training-worker
+kubelet                 Pulled              hello-777bd99564-pbrps   Container image "traefik/whoami:v1.10" already present on machine and can be accessed by the pod
+kubelet                 Created             hello-777bd99564-pbrps   Container created
+kubelet                 Started             hello-777bd99564-pbrps   Container started
 ...
 ```
 
@@ -615,6 +633,7 @@ That is the diagram from *Concepts*, as it happened: the deployment
 controller made a ReplicaSet, the ReplicaSet controller made two pods, the
 scheduler placed them on different workers, and each node's kubelet started
 its container. (You will also see the events of the `hello` pod from step 4.
+Events that happen within the same second may be listed in any order.
 Events are kept for one hour by default.)
 
 Now see the HTTP requests `kubectl` itself makes (`-v=6` logs each request;

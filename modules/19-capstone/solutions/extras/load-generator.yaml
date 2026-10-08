@@ -1,0 +1,75 @@
+# Exercise 2 - solution: an in-cluster load generator for the HPA, plus the
+# NetworkPolicy it needs (default-deny-all blocks its egress otherwise).
+#
+#   kubectl apply -f modules/19-capstone/solutions/extras/load-generator.yaml
+#   kubectl -n lab-capstone get hpa backend -w        # needs metrics-server (module 14)
+#   kubectl -n lab-capstone delete -f modules/19-capstone/solutions/extras/load-generator.yaml
+#
+# What limits scaling: maxReplicas (5), the nodes' allocatable CPU vs the
+# backend's 50m request, and - with this toy backend - the fact that each
+# request forks a shell + psql, so the database becomes the bottleneck long
+# before the backend pods do. Scaling the stateless tier doesn't scale the DB.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: load-generator
+  namespace: lab-capstone
+  labels:
+    app: load-generator
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: load-generator
+  template:
+    metadata:
+      labels:
+        app: load-generator
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 100            # curl_user
+        runAsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: curl
+          image: curlimages/curl:8.11.1
+          command:
+            - sh
+            - -c
+            - |
+              while true; do
+                curl -s -o /dev/null --max-time 5 http://frontend/api/items
+              done
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests: { cpu: 50m, memory: 16Mi }
+            limits:   { cpu: 200m, memory: 32Mi }
+---
+# The frontend policy already accepts port 8080 from any pod; the load
+# generator additionally needs permission to SEND to it.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: load-generator-egress
+  namespace: lab-capstone
+  labels:
+    app: load-generator
+spec:
+  podSelector:
+    matchLabels:
+      app: load-generator
+  policyTypes: ["Egress"]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: frontend
+      ports:
+        - { protocol: TCP, port: 8080 }

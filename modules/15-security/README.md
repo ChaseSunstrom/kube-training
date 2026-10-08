@@ -101,7 +101,7 @@ them, configured with namespace labels:
 
 ```
 pod-security.kubernetes.io/<MODE>: <LEVEL>
-pod-security.kubernetes.io/<MODE>-version: v1.33     # or "latest"
+pod-security.kubernetes.io/<MODE>-version: v1.37     # or "latest"
 ```
 
 | Mode | Effect | Checks |
@@ -156,8 +156,9 @@ Inside CEL, `object` is the incoming object (`oldObject` on UPDATE),
 `request` has the user and operation, `namespaceObject` the namespace, and
 `params` the optional parameter resource. Both objects are cluster-scoped.
 
-Its sibling **MutatingAdmissionPolicy** (CEL-based mutation) is alpha in 1.33
-and beta in 1.34 - not covered here.
+Its newer sibling **MutatingAdmissionPolicy** does CEL-based *mutation* (for
+example adding default securityContexts). It is not covered here - check
+the docs for its status in your Kubernetes version before relying on it.
 
 ### Beyond the built-ins (concepts only)
 
@@ -172,10 +173,10 @@ and beta in 1.34 - not covered here.
   admission time with Kyverno `verifyImages`, the Sigstore
   `policy-controller`, or Ratify + Gatekeeper. Combine with vulnerability
   scanning (Trivy, Grype) in CI.
-* **Node/runtime hardening** - user namespaces (`spec.hostUsers: false`, beta
-  and on by default in 1.33: root in the pod is an unprivileged uid on the
-  node), AppArmor/SELinux profiles, sandboxed runtimes via `RuntimeClass`
-  (gVisor, Kata Containers).
+* **Node/runtime hardening** - user namespaces (`spec.hostUsers: false`,
+  enabled by default since 1.33 on nodes whose kernel and runtime support it:
+  root in the pod is an unprivileged uid on the node), AppArmor/SELinux
+  profiles, sandboxed runtimes via `RuntimeClass` (gVisor, Kata Containers).
 
 ### Hardening checklist
 
@@ -244,7 +245,7 @@ kubectl get ns lab-security lab-security-restricted --show-labels
 
 ```
 NAME                      STATUS   AGE   LABELS
-lab-security              Active   5s    app=security,kubernetes.io/metadata.name=lab-security,pod-security.kubernetes.io/audit-version=v1.33,pod-security.kubernetes.io/audit=restricted,pod-security.kubernetes.io/enforce-version=v1.33,pod-security.kubernetes.io/enforce=baseline,...
+lab-security              Active   5s    app=security,kubernetes.io/metadata.name=lab-security,pod-security.kubernetes.io/audit-version=v1.37,pod-security.kubernetes.io/audit=restricted,pod-security.kubernetes.io/enforce-version=v1.37,pod-security.kubernetes.io/enforce=baseline,...
 lab-security-restricted   Active   5s    app=security,...,pod-security.kubernetes.io/enforce=restricted,...
 ```
 
@@ -259,7 +260,7 @@ exactly what is wrong with this pod (it is still admitted - enforce is only
 `baseline`):
 
 ```
-Warning: would violate PodSecurity "restricted:v1.33": allowPrivilegeEscalation != false (container "app" must set securityContext.allowPrivilegeEscalation=false), unrestricted capabilities (container "app" must set securityContext.capabilities.drop=["ALL"]), runAsNonRoot != true (pod or container "app" must set securityContext.runAsNonRoot=true), seccompProfile (pod or container "app" must set securityContext.seccompProfile.type to "RuntimeDefault" or "Localhost")
+Warning: would violate PodSecurity "restricted:v1.37": allowPrivilegeEscalation != false (container "app" must set securityContext.allowPrivilegeEscalation=false), unrestricted capabilities (container "app" must set securityContext.capabilities.drop=["ALL"]), runAsNonRoot != true (pod or container "app" must set securityContext.runAsNonRoot=true), seccompProfile (pod or container "app" must set securityContext.seccompProfile.type to "RuntimeDefault" or "Localhost")
 pod/as-root created
 ```
 
@@ -381,7 +382,7 @@ kubectl apply -f modules/15-security/psa/01-privileged-pod.yaml
 ```
 
 ```
-Error from server (Forbidden): error when creating "modules/15-security/psa/01-privileged-pod.yaml": pods "privileged" is forbidden: violates PodSecurity "restricted:v1.33": host namespaces (hostNetwork=true, hostPID=true), privileged (container "shell" must not set securityContext.privileged=true), allowPrivilegeEscalation != false (...), unrestricted capabilities (...), restricted volume types (volume "host-root" uses restricted volume type "hostPath"), runAsNonRoot != true (...), seccompProfile (...)
+Error from server (Forbidden): error when creating "modules/15-security/psa/01-privileged-pod.yaml": pods "privileged" is forbidden: violates PodSecurity "restricted:v1.37": host namespaces (hostNetwork=true, hostPID=true), privileged (container "shell" must not set securityContext.privileged=true), allowPrivilegeEscalation != false (...), unrestricted capabilities (...), restricted volume types (volume "host-root" uses restricted volume type "hostPath"), runAsNonRoot != true (...), seccompProfile (...)
 ```
 
 ```bash
@@ -389,7 +390,7 @@ kubectl apply -f modules/15-security/psa/02-root-pod.yaml
 ```
 
 ```
-Error from server (Forbidden): error when creating "modules/15-security/psa/02-root-pod.yaml": pods "root-pod" is forbidden: violates PodSecurity "restricted:v1.33": allowPrivilegeEscalation != false (container "app" must set securityContext.allowPrivilegeEscalation=false), unrestricted capabilities (container "app" must set securityContext.capabilities.drop=["ALL"]), runAsNonRoot != true (pod or container "app" must set securityContext.runAsNonRoot=true), seccompProfile (pod or container "app" must set securityContext.seccompProfile.type to "RuntimeDefault" or "Localhost")
+Error from server (Forbidden): error when creating "modules/15-security/psa/02-root-pod.yaml": pods "root-pod" is forbidden: violates PodSecurity "restricted:v1.37": allowPrivilegeEscalation != false (container "app" must set securityContext.allowPrivilegeEscalation=false), unrestricted capabilities (container "app" must set securityContext.capabilities.drop=["ALL"]), runAsNonRoot != true (pod or container "app" must set securityContext.runAsNonRoot=true), seccompProfile (pod or container "app" must set securityContext.seccompProfile.type to "RuntimeDefault" or "Localhost")
 ```
 
 The same pod as `01-pod-root.yaml` - fine under `baseline`, rejected under
@@ -404,7 +405,7 @@ kubectl -n lab-security-restricted get events --field-selector reason=FailedCrea
 ```
 
 ```
-Warning: would violate PodSecurity "restricted:v1.33": allowPrivilegeEscalation != false (...), ...
+Warning: would violate PodSecurity "restricted:v1.37": allowPrivilegeEscalation != false (...), ...
 deployment.apps/sneaky created
 
 NAME                     READY   UP-TO-DATE   AVAILABLE   AGE
@@ -414,7 +415,7 @@ NAME                                DESIRED   CURRENT   READY   AGE
 replicaset.apps/sneaky-574bf48765   1         0         0       3s
 
 LAST SEEN   TYPE      REASON         OBJECT                         MESSAGE
-4s          Warning   FailedCreate   replicaset/sneaky-574bf48765   Error creating: pods "sneaky-574bf48765-v2pbc" is forbidden: violates PodSecurity "restricted:v1.33": ...
+4s          Warning   FailedCreate   replicaset/sneaky-574bf48765   Error creating: pods "sneaky-574bf48765-v2pbc" is forbidden: violates PodSecurity "restricted:v1.37": ...
 ```
 
 The Deployment was stored (only a *warning*), but every pod its ReplicaSet
@@ -443,7 +444,7 @@ kubectl label --dry-run=server --overwrite ns lab-security pod-security.kubernet
 ```
 
 ```
-Warning: existing pods in namespace "lab-security" violate the new PodSecurity enforce level "restricted:v1.33"
+Warning: existing pods in namespace "lab-security" violate the new PodSecurity enforce level "restricted:v1.37"
 Warning: as-root (and 1 other pod): allowPrivilegeEscalation != false, unrestricted capabilities, runAsNonRoot != true, seccompProfile
 Warning: caps-dropped: allowPrivilegeEscalation != false, runAsNonRoot != true, seccompProfile
 namespace/lab-security labeled (server dry run)
@@ -464,8 +465,8 @@ kubectl -n lab-security-restricted exec deploy/nginx-nonroot -- ps -o user,pid,c
 deployment "nginx-nonroot" successfully rolled out
 USER     PID   COMMAND
 nginx        1 nginx
+nginx       23 nginx
 nginx       24 nginx
-nginx       25 nginx
 ...
 ```
 
@@ -638,11 +639,13 @@ kubectl -n lab-security-restricted debug $POD -it --image=busybox:1.37 --target=
 ```
 
 ```
-Error from server (Forbidden): pods "nginx-nonroot-6dbf7b7cbd-dncc9" is forbidden: violates PodSecurity "restricted:v1.33": allowPrivilegeEscalation != false (container "debugger-gh8ht" must set securityContext.allowPrivilegeEscalation=false), unrestricted capabilities (container "debugger-gh8ht" must set securityContext.capabilities.drop=["ALL"])
+Warning: Non-root user is configured for the entire target Pod, and some capabilities granted by debug profile may not work. Please consider using "--custom" with a custom profile that specifies "securityContext.runAsUser: 0".
+Error from server (Forbidden): pods "nginx-nonroot-78fcdccb55-7kpbc" is forbidden: violates PodSecurity "restricted:v1.37": allowPrivilegeEscalation != false (container "debugger-949kg" must set securityContext.allowPrivilegeEscalation=false), unrestricted capabilities (container "debugger-949kg" must set securityContext.capabilities.drop=["ALL"]; container "debugger-949kg" must not include "SYS_PTRACE" in securityContext.capabilities.add)
 ```
 
-Use the `restricted` debugging profile, which sets a compliant
-securityContext on the debug container:
+The default debugging profile (`general`) adds the `SYS_PTRACE` capability,
+which `restricted` forbids. Use the `restricted` profile, which sets a
+compliant securityContext on the debug container:
 
 ```bash
 kubectl -n lab-security-restricted debug $POD -it --image=busybox:1.37 --target=nginx --profile=restricted
@@ -653,7 +656,7 @@ kubectl -n lab-security-restricted debug $POD -it --image=busybox:1.37 --target=
 uid=101 gid=101 groups=101
 PID   USER     TIME  COMMAND
     1 101       0:00 nginx: master process nginx -g daemon off;
-   24 101       0:00 nginx: worker process
+   23 101       0:00 nginx: worker process
 ```
 
 ## Exercises

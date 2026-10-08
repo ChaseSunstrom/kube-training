@@ -1,0 +1,45 @@
+# Exercise 4 - "I allowed the port, why is it still blocked?"
+#
+# Someone exposed backend's admin endpoint on a new Service port 9090 and
+# wrote a policy allowing frontend to use it. From lab-netpol/frontend:
+#   kubectl -n lab-netpol exec frontend -- curl -s -m 3 http://backend-admin:9090
+# times out (once 03 default-deny-ingress is in place). Find the mistake and
+# fix the POLICY (not the Service). If you applied 08 (egress deny), frontend
+# also needs an egress rule for the right port.
+# Solution: ../solutions/04-service-port-fixed.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-admin
+  namespace: lab-netpol
+  labels:
+    app: backend
+spec:
+  selector:
+    app: backend
+  ports:
+    - name: admin
+      port: 9090          # what clients connect to
+      targetPort: admin   # = 8080 on the pod
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend-allow-admin-9090
+  namespace: lab-netpol
+  labels:
+    app: backend
+spec:
+  podSelector:
+    matchLabels:
+      app: backend
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: frontend
+      ports:
+        - protocol: TCP
+          port: 9090

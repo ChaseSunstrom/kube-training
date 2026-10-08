@@ -102,7 +102,7 @@ That suffix is why CronJob names are limited to 52 characters.
 | `schedule` | 5-field cron: `minute hour day-of-month month day-of-week`, e.g. `"30 2 * * 1-5"`, or macros like `@daily` |
 | `timeZone` | IANA zone such as `"Europe/Berlin"`. Without it, the controller manager's local time zone is used. `CRON_TZ=` inside `schedule` is rejected. |
 | `concurrencyPolicy` | `Allow` (default): overlapping runs are fine. `Forbid`: skip a run while the previous one is active. `Replace`: delete the active run and start the new one. |
-| `startingDeadlineSeconds` | how late a run may still start (controller down, Forbid blocking). Later than that and it's counted as missed. If more than 100 runs are missed, the controller stops scheduling until you set this field. |
+| `startingDeadlineSeconds` | how late a run may still start (controller down, Forbid blocking). Later than that and it's counted as missed. Without it, if more than 100 schedules were missed (after a long outage, say), the controller refuses to start the Job and logs an error. |
 | `successfulJobsHistoryLimit` / `failedJobsHistoryLimit` | how many finished Jobs to keep |
 | `suspend` | pause future runs (running Jobs are not touched) |
 

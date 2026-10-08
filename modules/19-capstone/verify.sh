@@ -88,6 +88,7 @@ section "3. Seed Job and data"
 succ=$(k get job db-seed -o jsonpath='{.status.succeeded}' 2>/dev/null)
 [ "${succ:-0}" -ge 1 ] && pass "Job db-seed succeeded" || fail "Job db-seed missing or not succeeded"
 count_items() {
+  k get pod db-0 >/dev/null 2>&1 || return 0
   k exec db-0 -c "$(k get pod db-0 -o jsonpath='{.spec.containers[0].name}')" -- \
     sh -c 'psql -X -q -t -A -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-${POSTGRES_USER:-postgres}}" -c "SELECT count(*) FROM items"' 2>/dev/null | tr -d '[:space:]'
 }
@@ -139,6 +140,9 @@ list_containers() {
   k get cronjob -o jsonpath='{range .items[*]}{range .spec.jobTemplate.spec.template.spec.containers[*]}{.name}|{.resources.requests.cpu}|{.resources.requests.memory}|{.resources.limits.memory}|{.securityContext.readOnlyRootFilesystem}|{.securityContext.allowPrivilegeEscalation}{"\n"}{end}{end}'
 }
 rows_c=$(list_containers | grep -v '^$')
+if [ -z "$rows_c" ]; then
+  fail "no Deployments/StatefulSets/Jobs/CronJobs found"
+else
 nores=$(echo "$rows_c" | awk -F'|' '$2=="" || $3=="" || $4=="" {print $1}' | sort -u | tr '\n' ' ')
 [ -z "$nores" ] && pass "all $(echo "$rows_c" | wc -l | tr -d ' ') containers set requests.cpu, requests.memory and limits.memory" \
                 || fail "containers missing requests/limits: $nores"
@@ -146,10 +150,14 @@ norofs=$(echo "$rows_c" | awk -F'|' '$5!="true" {print $1}' | sort -u | tr '\n' 
 [ -z "$norofs" ] && pass "all containers use readOnlyRootFilesystem" || fail "containers without readOnlyRootFilesystem: $norofs"
 nope=$(echo "$rows_c" | awk -F'|' '$6!="false" {print $1}' | sort -u | tr '\n' ' ')
 [ -z "$nope" ] && pass "all containers set allowPrivilegeEscalation: false" || fail "containers without allowPrivilegeEscalation=false: $nope"
+fi
 
 # ---------------------------------------------------------------------------
 section "7. End to end through the frontend (via kubectl port-forward)"
 LPORT=$(( 20000 + RANDOM % 20000 ))
+if ! k get svc frontend >/dev/null 2>&1; then
+  fail "no Service frontend to test through"
+else
 k port-forward svc/frontend "$LPORT:80" >/dev/null 2>&1 &
 PF_PID=$!
 for _ in $(seq 1 30); do curl -s -o /dev/null "http://127.0.0.1:$LPORT/" && break; sleep 0.5; done
@@ -160,6 +168,7 @@ n=$(printf '%s' "$body" | grep -o '"name"' | wc -l | tr -d ' ')
 [ "${n:-0}" -ge 3 ] && pass "GET /api/items returns $n items from the database" \
                     || fail "GET /api/items did not return >= 3 items: $(printf '%s' "$body" | head -c 200)"
 kill "$PF_PID" 2>/dev/null; PF_PID=""
+fi
 
 # ---------------------------------------------------------------------------
 section "8. NetworkPolicies"

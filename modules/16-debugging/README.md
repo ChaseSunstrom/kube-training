@@ -76,7 +76,7 @@ pod is deleted. `--profile` chooses the security settings of the debug
 container: `general` (default behaviour, adds `SYS_PTRACE`), `baseline`,
 `restricted` (passes PSA restricted - see [module 15](../15-security/README.md)),
 `netadmin` (`NET_ADMIN`/`NET_RAW`, for tcpdump), `sysadmin` (privileged).
-Not passing `--profile` prints a deprecation warning for the old `legacy` profile.
+Current kubectl defaults to `general`; older versions defaulted to a `legacy` profile and printed a deprecation warning when you didn't pass `--profile`.
 
 ## Files
 
@@ -142,23 +142,23 @@ The two parts that matter most (trimmed):
 
 ```
     State:          Running
-      Started:      Thu, 08 Oct 2026 10:31:22 +0000
+      Started:      Thu, 08 Oct 2026 11:08:29 +0000
     Last State:     Terminated
       Reason:       Error
       Exit Code:    3
-      Started:      Thu, 08 Oct 2026 10:29:37 +0000
-      Finished:     Thu, 08 Oct 2026 10:29:52 +0000
+      Started:      Thu, 08 Oct 2026 11:07:44 +0000
+      Finished:     Thu, 08 Oct 2026 11:07:59 +0000
     Ready:          True
-    Restart Count:  5
+    Restart Count:  3
 ...
 Events:
   Type     Reason     Age                   From               Message
   ----     ------     ----                  ----               -------
-  Normal   Scheduled  4m40s                 default-scheduler  Successfully assigned lab-debugging/flaky to kube-training-worker2
-  Warning  BackOff    18s (x14 over 3m57s)  kubelet            Back-off restarting failed container app in pod flaky_lab-debugging(...)
-  Normal   Pulled     4s (x6 over 4m37s)    kubelet            Container image "busybox:1.37" already present on machine
-  Normal   Created    4s (x6 over 4m37s)    kubelet            Created container: app
-  Normal   Started    2s (x6 over 4m32s)    kubelet            Started container app
+  Normal   Scheduled  95s                default-scheduler  Successfully assigned lab-debugging/flaky to kube-training-worker
+  Warning  BackOff    31s (x2 over 58s)  kubelet            spec.containers{app}: Back-off restarting failed container app in pod flaky_lab-debugging(...)
+  Normal   Pulled     3s (x4 over 92s)   kubelet            spec.containers{app}: Container image "busybox:1.37" already present on machine and can be accessed by the pod
+  Normal   Created    3s (x4 over 92s)   kubelet            spec.containers{app}: Container created
+  Normal   Started    1s (x4 over 91s)   kubelet            spec.containers{app}: Container started
 ```
 
 `Last State` is the previous run of the container: it exited with code 3
@@ -194,12 +194,12 @@ kubectl logs flaky --previous   # the one that crashed
 ```
 
 ```
-2026-10-08T10:31:22+00:00 starting up
+2026-10-08T11:08:29+00:00 starting up
 ```
 ```
-2026-10-08T10:29:37+00:00 starting up
-2026-10-08T10:29:42+00:00 connected to queue
-2026-10-08T10:29:52+00:00 FATAL: lost connection to queue (simulated)
+2026-10-08T11:07:44+00:00 starting up
+2026-10-08T11:07:49+00:00 connected to queue
+2026-10-08T11:07:59+00:00 FATAL: lost connection to queue (simulated)
 ```
 
 `--previous` is the single most useful flag for crash loops. (While the pod
@@ -221,10 +221,12 @@ kubectl get events -A --field-selector type=Warning        # whole cluster
 ```
 
 ```
-LAST SEEN              TYPE      REASON      OBJECT      MESSAGE
-4m40s                  Normal    Scheduled   Pod/flaky   Successfully assigned lab-debugging/flaky to kube-training-worker2
-18s (x14 over 3m57s)   Warning   BackOff     Pod/flaky   Back-off restarting failed container app in pod flaky_lab-debugging(...)
-4s (x6 over 4m37s)     Normal    Pulled      Pod/flaky   Container image "busybox:1.37" already present on machine
+LAST SEEN           TYPE      REASON      OBJECT      MESSAGE
+96s                 Normal    Scheduled   Pod/flaky   Successfully assigned lab-debugging/flaky to kube-training-worker
+32s (x2 over 59s)   Warning   BackOff     Pod/flaky   Back-off restarting failed container app in pod flaky_lab-debugging(...)
+4s (x4 over 93s)    Normal    Pulled      Pod/flaky   Container image "busybox:1.37" already present on machine and can be accessed by the pod
+4s (x4 over 93s)    Normal    Created     Pod/flaky   Container created
+2s (x4 over 92s)    Normal    Started     Pod/flaky   Container started
 ```
 
 Events on *other* objects are often the key: a ReplicaSet that can't create
@@ -480,11 +482,11 @@ healthy here. Their problem only shows in the client logs.
 <summary>Answer</summary>
 
 ```
-Normal   Pulling    13s   kubelet  Pulling image "nginx:1.27-alpnie"
-Warning  Failed     13s   kubelet  Failed to pull image "nginx:1.27-alpnie": failed to pull and unpack image "docker.io/library/nginx:1.27-alpnie": failed to resolve reference "docker.io/library/nginx:1.27-alpnie": docker.io/library/nginx:1.27-alpnie: not found
-Warning  Failed     13s   kubelet  Error: ErrImagePull
-Normal   BackOff    13s   kubelet  Back-off pulling image "nginx:1.27-alpnie"
-Warning  Failed     13s   kubelet  Error: ImagePullBackOff
+Normal   Pulling    2s (x2 over 15s)  kubelet  spec.containers{nginx}: Pulling image "nginx:1.27-alpnie"
+Warning  Failed     2s (x2 over 15s)  kubelet  spec.containers{nginx}: Failed to pull image "nginx:1.27-alpnie": failed to pull and unpack image "docker.io/library/nginx:1.27-alpnie": failed to resolve reference "docker.io/library/nginx:1.27-alpnie": docker.io/library/nginx:1.27-alpnie: not found
+Warning  Failed     2s (x2 over 15s)  kubelet  spec.containers{nginx}: Error: ErrImagePull
+Normal   BackOff    14s               kubelet  spec.containers{nginx}: Back-off pulling image "nginx:1.27-alpnie"
+Warning  Failed     14s               kubelet  spec.containers{nginx}: Error: ImagePullBackOff
 ```
 
 **Cause:** typo in the tag - `1.27-alpnie` instead of `1.27-alpine`. The
@@ -545,7 +547,7 @@ inside the script, you would instead see exit code 127 and a
 <summary>Answer</summary>
 
 ```
-Warning  Failed  4s (x4 over 27s)  kubelet  Error: couldn't find key PAYMENT_GATEWAY in ConfigMap lab-debugging/billing-config
+Warning  Failed  4s (x3 over 16s)  kubelet  spec.containers{api}: Error: couldn't find key PAYMENT_GATEWAY in ConfigMap lab-debugging/billing-config
 ```
 
 ```bash
@@ -576,13 +578,14 @@ Alternatives: add the key to the ConfigMap, or mark the reference
 <summary>Answer</summary>
 
 ```
-Warning  FailedScheduling  3s (x3 over 28s)  default-scheduler  0/3 nodes are available: 1 node(s) had untolerated taint {node-role.kubernetes.io/control-plane: }, 2 Insufficient cpu, 2 Insufficient memory. preemption: 0/3 nodes are available: 1 Preemption is not helpful for scheduling, 2 No preemption victims found for incoming pod.
+Warning  FailedScheduling  1s (x10 over 17s)  default-scheduler  0/3 nodes are available: 1 node(s) had untolerated taint(s), 2 Insufficient cpu, 2 Insufficient memory. preemption: 0/3 nodes are available: 3 Preemption is not helpful for scheduling.
 ```
 
 **Cause:** it requests 64 CPUs and 256Gi of memory. Requests must fit on a
 single node's *allocatable* capacity minus what is already requested there.
 The message counts the reason per node: the control plane is excluded by its
-taint, the two workers by insufficient CPU and memory.
+taint (`node-role.kubernetes.io/control-plane:NoSchedule`), the two workers
+by insufficient CPU and memory.
 
 **Fix:** [`solutions/04-huge-requests.yaml`](solutions/04-huge-requests.yaml) (realistic requests).
 Other `FailedScheduling` reasons you'll meet: `didn't match Pod's node
@@ -603,13 +606,13 @@ and `kubectl describe pvc uploads-data`, then `kubectl get storageclass`.
 <summary>Answer</summary>
 
 ```
-Warning  FailedScheduling    9s (x3 over 27s)   default-scheduler            0/3 nodes are available: pod has unbound immediate PersistentVolumeClaims. ...
+Warning  FailedScheduling    17s                default-scheduler            0/3 nodes are available: pod has unbound immediate PersistentVolumeClaims. not found
 ```
 ```
 NAME           STATUS    VOLUME   CAPACITY   ACCESS MODES   STORAGECLASS   ...
 uploads-data   Pending                                      fast-ssd       ...
 
-Warning  ProvisioningFailed  11s (x3 over 28s)  persistentvolume-controller  storageclass.storage.k8s.io "fast-ssd" not found
+Warning  ProvisioningFailed  0s (x3 over 17s)   persistentvolume-controller  storageclass.storage.k8s.io "fast-ssd" not found
 ```
 ```
 NAME                 PROVISIONER             RECLAIMPOLICY   VOLUMEBINDINGMODE      ...
@@ -729,13 +732,13 @@ the endpoints' `ready` condition.
 <summary>Answer</summary>
 
 ```
-Warning  Unhealthy  2s (x11 over 48s)  kubelet  Readiness probe failed: Get "http://10.244.2.123:8080/": dial tcp 10.244.2.123:8080: connect: connection refused
+Warning  Unhealthy  5s (x20 over 91s)  kubelet  spec.containers{nginx}: Readiness probe failed: Get "http://10.244.3.10:8080/": dial tcp 10.244.3.10:8080: connect: connection refused
 ```
 ```bash
 kubectl get endpointslices -l kubernetes.io/service-name=status-page \
   -o jsonpath='{range .items[*].endpoints[*]}{.addresses[0]} ready={.conditions.ready}{"\n"}{end}'
-# 10.244.2.123 ready=false
-# 10.244.1.171 ready=false
+# 10.244.1.252 ready=false
+# 10.244.3.10 ready=false
 ```
 
 **Cause:** the readiness probe checks port 8080; nginx listens on 80. The

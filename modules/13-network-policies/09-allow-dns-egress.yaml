@@ -1,0 +1,36 @@
+# 09 - Allow every pod in lab-netpol to talk to CoreDNS.
+#
+# The standard companion of any default-deny-egress policy. The destination
+# is "pods labelled k8s-app=kube-dns in the namespace kube-system" (AND -
+# both selectors in ONE element, see 06), on port 53 over UDP and TCP
+# (TCP is used for large answers and must not be forgotten).
+#
+# Why select the pods and not the kube-dns Service IP (10.96.0.10)?
+# NetworkPolicy works on pod IPs; in most implementations (kindnet, Calico,
+# Cilium) the Service IP has already been translated to a CoreDNS pod IP when
+# the policy is evaluated. (The spec leaves this implementation-defined, so
+# don't write policies against Service IPs.)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns-egress
+  namespace: lab-netpol
+  labels:
+    app: lab-netpol
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53

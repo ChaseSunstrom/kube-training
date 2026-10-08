@@ -18,12 +18,18 @@ labels:
     includeSelectors: false
     includeTemplates: true
 
-# Credentials -> Secret db-credentials-<hash>; every secretRef/secretKeyRef
-# to "db-credentials" in the base is rewritten to the hashed name.
+# Credentials -> Secret "db-credentials", generated from db.env.
+# Deliberately WITHOUT the hash suffix: PostgreSQL reads POSTGRES_PASSWORD
+# only when it initialises an empty data directory, so rolling the database
+# on a Secret change would suggest a password change that never happens.
+# Rotating a DB password is a deliberate procedure (README exercise 4).
+# A stable name also lets one-off Jobs (extras/restore-job.yaml) refer to it.
 secretGenerator:
   - name: db-credentials
     envs:
       - db.env
+    options:
+      disableNameSuffixHash: true
 
 # Pin the frontend image by digest (module 15/17): the tag stays readable,
 # the digest guarantees the exact bytes.

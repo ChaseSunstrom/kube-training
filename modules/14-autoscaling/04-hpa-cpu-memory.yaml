@@ -1,0 +1,49 @@
+# 04 - The same HPA with TWO metrics: CPU utilization and memory.
+#
+# Apply it over 02 (same name -> it replaces the spec):
+#   kubectl apply -f modules/14-autoscaling/04-hpa-cpu-memory.yaml
+#
+# With several metrics the HPA computes a replica count for EACH metric and
+# uses the LARGEST one. Scale-down only happens when every metric agrees.
+#
+# Memory is shown with target type AverageValue (an absolute amount per pod)
+# instead of Utilization: both work if the pods have memory requests.
+# Be careful with memory as a scaling signal: many runtimes (JVM, Go, Node.js)
+# don't give memory back when load drops, so the HPA may scale up and never
+# scale down again. CPU, request rate or queue length are usually better
+# signals - the latter two need a custom/external metrics adapter
+# (e.g. Prometheus Adapter or KEDA).
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: web
+  namespace: lab-autoscaling
+  labels:
+    app: web
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: web
+  minReplicas: 1
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 50
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: AverageValue
+          averageValue: 40Mi      # scale out if the average pod uses > 40 MiB
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 30

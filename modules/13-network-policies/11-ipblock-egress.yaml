@@ -1,0 +1,41 @@
+# 11 - ipBlock: allow frontend to reach the Kubernetes API server.
+#
+# Some destinations are not pods, so no podSelector can match them: the API
+# server, databases outside the cluster, cloud APIs. For those you use
+# ipBlock with a CIDR (plus optional "except" CIDRs carved out of it).
+#
+# The API server is a good example of two gotchas:
+#  1. Pods reach it via the "kubernetes" Service (10.96.0.1:443), but its
+#     endpoint is the control-plane NODE (on kind: <node IP>:6443). Policies
+#     are evaluated after the Service address is translated (in kindnet,
+#     Calico, Cilium...), so you must allow the endpoint IP and port 6443,
+#     not 10.96.0.1:443. Find the real endpoint with:
+#       kubectl get endpointslices -n default -l kubernetes.io/service-name=kubernetes
+#  2. ipBlock is meant for addresses OUTSIDE the pod network. Don't use it
+#     to select pods (pod IPs change) - use pod/namespace selectors.
+#
+# 172.16.0.0/12 covers the address pools Docker uses for its networks
+# (kind's "kind" network is usually 172.18.0.0/16). On a real cluster you'd
+# write the exact control-plane addresses (/32 each). A classic "except":
+# allow the internet but not the cloud metadata service:
+#   - ipBlock: {cidr: 0.0.0.0/0, except: [169.254.169.254/32]}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: frontend-allow-egress-to-apiserver
+  namespace: lab-netpol
+  labels:
+    app: frontend
+spec:
+  podSelector:
+    matchLabels:
+      app: frontend
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 172.16.0.0/12
+      ports:
+        - protocol: TCP
+          port: 6443

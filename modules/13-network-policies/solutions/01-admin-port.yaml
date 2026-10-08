@@ -1,0 +1,49 @@
+# Solution to exercise 1: only lab-netpol/intruder may use the admin port.
+#
+# A new policy - policies are additive, so this ADDS to 04 (frontend -> :80)
+# without touching it. The named port "admin" resolves to 8080 on the
+# backend pod. If egress is locked down in lab-netpol (08), intruder ALSO
+# needs an egress rule to backend:8080 - that's the second policy.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend-allow-admin-from-intruder
+  namespace: lab-netpol
+  labels:
+    app: backend
+spec:
+  podSelector:
+    matchLabels:
+      app: backend
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: intruder
+      ports:
+        - protocol: TCP
+          port: admin
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: intruder-allow-egress-to-admin
+  namespace: lab-netpol
+  labels:
+    app: intruder
+spec:
+  podSelector:
+    matchLabels:
+      app: intruder
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: backend
+      ports:
+        - protocol: TCP
+          port: 8080

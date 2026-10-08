@@ -1,0 +1,28 @@
+# Exercise 5 - solution.
+#
+# Bug 1: the selector matches no pod (the pods are labelled app=whoami),
+#        so the Service has NO endpoints: `kubectl get endpointslices
+#        -l kubernetes.io/service-name=shop-frontend` shows ENDPOINTS <unset>.
+#        Clients get "connection refused" (kube-proxy rejects traffic to a
+#        Service without endpoints).
+# Bug 2: targetPort 8080 - nothing listens there (whoami listens on 80,
+#        named `http`). With bug 1 fixed, the slice lists the pod IPs with
+#        port 8080 and connections are refused by the pods.
+# Fix: select app=whoami and target the named port, as in 03-clusterip.yaml.
+#
+#   kubectl apply -f modules/04-services/solutions/fixed-service.yaml
+#   kubectl exec -n lab-services client -- curl -s http://shop-frontend | grep Hostname
+apiVersion: v1
+kind: Service
+metadata:
+  name: shop-frontend
+  namespace: lab-services
+  labels:
+    app: whoami
+spec:
+  selector:
+    app: whoami
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

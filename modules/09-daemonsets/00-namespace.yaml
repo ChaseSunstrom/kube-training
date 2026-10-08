@@ -1,0 +1,12 @@
+# Module 09 - DaemonSets
+#
+# Everything lives in lab-daemonsets; cleanup is
+#   kubectl delete namespace lab-daemonsets
+# This module only READS from kube-system (to look at real DaemonSets) and
+# never changes nodes.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-daemonsets
+  labels:
+    app: daemonsets

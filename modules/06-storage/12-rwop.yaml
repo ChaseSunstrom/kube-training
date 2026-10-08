@@ -3,8 +3,8 @@
 # RWOP (GA since Kubernetes 1.29) is enforced by the scheduler: while one pod
 # uses the claim, any other pod that references it is unschedulable - even
 # on the same node:
-#   node has pod using PersistentVolumeClaim with the same name and
-#   ReadWriteOncePod access mode
+#   1 node(s) unavailable due to PersistentVolumeClaim with ReadWriteOncePod
+#   access mode already in-use by another pod
 # It's meant for workloads that must never have two writers (e.g. a
 # single-instance database). Support depends on the volume plugin: most CSI
 # drivers and kind's local-path provisioner handle it.

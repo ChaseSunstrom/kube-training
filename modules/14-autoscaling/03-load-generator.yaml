@@ -1,0 +1,43 @@
+# 03 - Load generator: a busybox loop hammering the web Service.
+#
+# Each of the 4 shell loops requests 256 KiB from whoami's /data endpoint as
+# fast as it can. Start with replicas: 1; stop the load with
+#   kubectl -n lab-autoscaling scale deployment load-generator --replicas=0
+# and add more load with --replicas=2.
+#
+# The load generator itself has small requests/limits so it can't starve the
+# node - it's the web pods that should get busy.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: load-generator
+  namespace: lab-autoscaling
+  labels:
+    app: load-generator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: load-generator
+  template:
+    metadata:
+      labels:
+        app: load-generator
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: wget
+          image: busybox:1.37
+          command:
+            - sh
+            - -c
+            - |
+              for i in 1 2 3 4; do
+                (while true; do
+                   wget -q -O /dev/null "http://web/data?size=256&unit=KB" || sleep 1
+                 done) &
+              done
+              wait
+          resources:
+            requests: {cpu: 50m, memory: 16Mi}
+            limits: {cpu: 300m, memory: 32Mi}

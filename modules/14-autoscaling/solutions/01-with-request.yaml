@@ -1,0 +1,35 @@
+# Solution to exercise 1.
+#
+# describe hpa shows (ScalingActive False, FailedGetResourceMetric):
+#   failed to get cpu utilization: missing request for cpu in container whoami of Pod no-request-...
+# Utilization is "usage / request" - no request, no utilization. Note the
+# trap: the original only had a memory LIMIT. Kubernetes copies a limit into
+# the request when the request is missing, so it got a memory request, but
+# CPU had neither. Add a CPU request (and, as always, sensible limits).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: no-request
+  namespace: lab-autoscaling
+  labels:
+    app: no-request
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: no-request
+  template:
+    metadata:
+      labels:
+        app: no-request
+    spec:
+      containers:
+        - name: whoami
+          image: traefik/whoami:v1.10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 16Mi
+            limits:
+              cpu: 200m
+              memory: 64Mi

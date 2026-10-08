@@ -1,0 +1,42 @@
+# 03 - A DaemonSet for a SUBSET of nodes.
+#
+# nodeSelector restricts the DaemonSet to nodes with matching labels. Our
+# cluster labels the workers training/zone=zone-a and training/zone=zone-b,
+# so this agent runs on exactly one node. Real-world uses: GPU device plugins
+# only on GPU nodes (e.g. nvidia.com/gpu.present=true), storage agents only
+# on storage nodes, an agent per availability zone ...
+#
+# If a node's labels change later, the DaemonSet follows: a node that gains
+# the label gets a pod, a node that loses it has its pod removed.
+# (nodeAffinity works too and is more expressive - see modules/10-scheduling.)
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: zone-a-agent
+  namespace: lab-daemonsets
+  labels:
+    app: zone-a-agent
+spec:
+  selector:
+    matchLabels:
+      app: zone-a-agent
+  template:
+    metadata:
+      labels:
+        app: zone-a-agent
+    spec:
+      terminationGracePeriodSeconds: 5
+      nodeSelector:
+        training/zone: zone-a
+      containers:
+        - name: agent
+          image: busybox:1.37
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          command: ["sh", "-c", "trap 'exit 0' TERM; echo \"zone-a agent on $NODE_NAME\"; sleep 36000 & wait $!"]
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 50m, memory: 32Mi }

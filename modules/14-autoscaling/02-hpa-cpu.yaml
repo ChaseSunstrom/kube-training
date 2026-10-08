@@ -1,0 +1,58 @@
+# 02 - HorizontalPodAutoscaler (autoscaling/v2) on CPU utilization.
+#
+# Every 15 s the HPA controller (in kube-controller-manager) reads the pods'
+# CPU usage from the metrics API (served by metrics-server) and computes
+#
+#   desiredReplicas = ceil( currentReplicas * currentUtilization / target )
+#
+# e.g. 2 pods at 150% with target 50%  ->  ceil(2 * 150/50) = 6.
+# Changes smaller than the tolerance (default 10%) are ignored, and the
+# result is clamped to [minReplicas, maxReplicas].
+#
+# "behavior" shapes HOW FAST it scales (defaults in brackets):
+#   scaleUp:   no stabilization window [0 s]; may at most double (+100%) or
+#              add 4 pods per 15 s, whichever is more [selectPolicy: Max]
+#   scaleDown: uses the HIGHEST recommendation of the last
+#              stabilizationWindowSeconds [300 s] - so a short dip in load
+#              doesn't remove pods - and may remove up to 100% per 15 s
+# Below we keep scale-up fast and make scale-down quicker than the default
+# (60 s window) but gentle (at most 1 pod per 30 s), so you can watch it.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: web
+  namespace: lab-autoscaling
+  labels:
+    app: web
+spec:
+  scaleTargetRef:                 # what to scale (anything with a /scale subresource)
+    apiVersion: apps/v1
+    kind: Deployment
+    name: web
+  minReplicas: 1
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization       # percent of the pods' CPU REQUEST
+          averageUtilization: 50
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      selectPolicy: Max
+      policies:
+        - type: Percent
+          value: 100              # at most double ...
+          periodSeconds: 15
+        - type: Pods
+          value: 2                # ... or +2 pods, whichever is more
+          periodSeconds: 15
+    scaleDown:
+      stabilizationWindowSeconds: 60
+      selectPolicy: Min
+      policies:
+        - type: Pods
+          value: 1                # remove at most 1 pod ...
+          periodSeconds: 30       # ... every 30 s

@@ -26,6 +26,10 @@ cluster-down: ## Delete the kind cluster
 validate: ## Schema-check every manifest with kubeconform (no cluster needed)
 	scripts/validate.sh
 
+.PHONY: check-links
+check-links: ## Check every relative link (and #anchor) in the Markdown files
+	python3 scripts/check_links.py
+
 .PHONY: test-scenario
 test-scenario: ## Run the RWO ordered-pods scenario end-to-end on the current cluster
 	scenarios/rwo-pvc-ordered-pods/test.sh

@@ -615,8 +615,8 @@ kubectl get events -n lab-storage --field-selector involvedObject.name=rwo-c,rea
 NAME    READY   STATUS    RESTARTS   AGE
 rwo-c   0/1     Pending   0          0s
 ... 0/3 nodes are available: 1 node(s) didn't match PersistentVolume's node affinity,
-    1 node(s) didn't match Pod's node affinity/selector,
-    1 node(s) had untolerated taint {node-role.kubernetes.io/control-plane: }.
+    1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s).
+    preemption: 0/3 nodes are available: 3 Preemption is not helpful for scheduling.
 ```
 
 On kind the scheduler refuses because the data physically lives on the other
@@ -642,8 +642,9 @@ kubectl get events -n lab-storage --field-selector involvedObject.name=rwop-b,re
 NAME     READY   STATUS    RESTARTS   AGE   IP             NODE
 rwop-a   1/1     Running   0          7s    10.244.2.125   kube-training-worker
 rwop-b   0/1     Pending   0          7s    <none>         <none>
-... 0/3 nodes are available: 1 node(s) had untolerated taint {node-role.kubernetes.io/control-plane: },
-    2 node has pod using PersistentVolumeClaim with the same name and ReadWriteOncePod access mode.
+... 0/3 nodes are available: 1 node(s) didn't match Pod's node affinity/selector,
+    1 node(s) had untolerated taint(s), 1 node(s) unavailable due to PersistentVolumeClaim
+    with ReadWriteOncePod access mode already in-use by another pod. ...
 ```
 
 Same node, and still refused. (Whichever pod the scheduler handles first

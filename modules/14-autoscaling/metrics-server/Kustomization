@@ -1,0 +1,25 @@
+# metrics-server for kind:   kubectl apply -k modules/14-autoscaling/metrics-server/
+#
+# Takes the official, pinned release manifest and adds --kubelet-insecure-tls.
+# Why: metrics-server scrapes every kubelet over HTTPS. kind's kubelets serve
+# self-signed certificates that don't include the node IP as a SAN, so the
+# TLS check fails ("x509: cannot validate certificate ... doesn't contain any
+# IP SANs") and `kubectl top` never gets data. On a real cluster you'd fix the
+# kubelet serving certificates instead of disabling verification.
+#
+# (This file is called "Kustomization" - a name kustomize accepts - instead of
+# kustomization.yaml so that `kubectl apply -R -f modules/14-autoscaling/`
+# doesn't try to apply it as a Kubernetes object.)
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - https://github.com/kubernetes-sigs/metrics-server/releases/download/v0.9.0/components.yaml
+patches:
+  - target:
+      kind: Deployment
+      name: metrics-server
+      namespace: kube-system
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/args/-
+        value: --kubelet-insecure-tls

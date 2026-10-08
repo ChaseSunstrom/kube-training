@@ -1,0 +1,183 @@
+# 01 - The controller: Traefik Proxy v3.7, implementing BOTH the Ingress API
+# and the Gateway API.
+#
+# An Ingress or an HTTPRoute is only a description of routing rules. Nothing
+# happens until a CONTROLLER watches those objects and configures a proxy.
+# Kubernetes ships no such controller - you install one. Here it is spelled
+# out as plain YAML so you can see there's no magic: a ServiceAccount with
+# read access to Services/EndpointSlices/Secrets/Ingresses/Gateway API
+# objects, and a Deployment running the proxy.
+#
+# PREREQUISITE: the Gateway API CRDs (Traefik's Gateway provider needs them):
+#   kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.6.2/standard-install.yaml
+#
+# How traffic from your laptop reaches it (kind):
+#   cluster/kind-multi-node.yaml maps host ports 80/443 to ports 80/443 of the
+#   control-plane node container, and labels that node ingress-ready=true.
+#   The Traefik pod runs on that node (nodeSelector + toleration for the
+#   control-plane taint) and binds hostPort 80 -> containerPort 8000 and
+#   hostPort 443 -> 8443. So:  laptop:80 -> node:80 -> traefik:8000.
+#
+# Cluster-scoped objects are lab- prefixed: ClusterRole/ClusterRoleBinding
+# lab-ingress-traefik and IngressClass lab-traefik (the GatewayClass is in 05).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: traefik
+  namespace: lab-ingress
+  labels:
+    app: traefik
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: lab-ingress-traefik
+  labels:
+    app: traefik
+rules:
+  # Backends: where do Services' pods live?
+  - apiGroups: [""]
+    resources: ["services", "secrets", "nodes", "configmaps"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["discovery.k8s.io"]
+    resources: ["endpointslices"]
+    verbs: ["list", "watch"]
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get"]
+  # Ingress API
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses", "ingressclasses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses/status"]
+    verbs: ["update"]
+  # Gateway API
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["gatewayclasses", "gateways", "httproutes", "grpcroutes",
+                "tlsroutes", "tcproutes", "referencegrants", "backendtlspolicies"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["gatewayclasses/status", "gateways/status", "httproutes/status",
+                "grpcroutes/status", "tlsroutes/status", "tcproutes/status",
+                "backendtlspolicies/status"]
+    verbs: ["update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: lab-ingress-traefik
+  labels:
+    app: traefik
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: lab-ingress-traefik
+subjects:
+  - kind: ServiceAccount
+    name: traefik
+    namespace: lab-ingress
+---
+# IngressClass: "Ingresses with ingressClassName: lab-traefik are handled by
+# Traefik". The controller field is just an identifier string.
+apiVersion: networking.k8s.io/v1
+kind: IngressClass
+metadata:
+  name: lab-traefik
+  labels:
+    app: traefik
+  # annotations:
+  #   ingressclass.kubernetes.io/is-default-class: "true"  # use for Ingresses without a class
+spec:
+  controller: traefik.io/ingress-controller
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: traefik
+  namespace: lab-ingress
+  labels:
+    app: traefik
+spec:
+  replicas: 1                     # one pod per host port - see the README
+  strategy:
+    type: Recreate                # a 2nd pod can't bind the same hostPort during a rollout
+  selector:
+    matchLabels:
+      app: traefik
+  template:
+    metadata:
+      labels:
+        app: traefik
+    spec:
+      serviceAccountName: traefik
+      nodeSelector:
+        ingress-ready: "true"     # the node with the host port mappings
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: traefik
+          image: traefik:v3.7.13
+          args:
+            # Entry points = ports Traefik listens on (unprivileged ports;
+            # the hostPorts below expose them as 80/443 on the node).
+            - --entryPoints.web.address=:8000
+            - --entryPoints.websecure.address=:8443
+            # Kubernetes Ingress provider, only for our IngressClass.
+            - --providers.kubernetesingress=true
+            - --providers.kubernetesingress.ingressClass=lab-traefik
+            - --providers.kubernetesingress.ingressEndpoint.hostname=localhost
+            # Gateway API provider (GatewayClass controllerName traefik.io/gateway-controller).
+            - --providers.kubernetesgateway=true
+            - --providers.kubernetesgateway.statusAddress.hostname=localhost
+            # Dashboard + API on the internal "traefik" entry point (:8080),
+            # reachable only via kubectl port-forward. Never expose it like this.
+            - --api.dashboard=true
+            - --api.insecure=true
+            - --ping=true
+            - --log.level=INFO
+            - --accesslog=true
+          ports:
+            - name: web
+              containerPort: 8000
+              hostPort: 80
+            - name: websecure
+              containerPort: 8443
+              hostPort: 443
+            - name: traefik
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: traefik
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: traefik
+            periodSeconds: 10
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

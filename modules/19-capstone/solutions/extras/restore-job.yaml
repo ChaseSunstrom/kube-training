@@ -1,0 +1,77 @@
+# Exercise 3 - solution: restore the newest dump from the db-backups PVC.
+#
+#   kubectl -n lab-capstone exec db-0 -- psql -U shop -d shop -c 'DELETE FROM items'
+#   kubectl apply -f modules/19-capstone/solutions/extras/restore-job.yaml
+#   kubectl -n lab-capstone logs -f job/db-restore
+#   kubectl -n lab-capstone exec db-0 -- psql -U shop -d shop -c 'SELECT count(*) FROM items'
+#
+# Answers to the questions in the exercise:
+#   * Any pod may mount the ReadWriteOnce volume, but only on the node where
+#     the volume lives (RWO = one NODE, not one pod). With local-path, the PV
+#     has node affinity, so the scheduler puts this Job's pod on that node
+#     automatically. (ReadWriteOncePod would allow only one pod at a time -
+#     see the RWO scenario: ../../../../scenarios/rwo-pvc-ordered-pods/README.md)
+#   * The dumps are made with --clean --if-exists, so restoring drops and
+#     recreates the table instead of failing with "already exists".
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-restore
+  namespace: lab-capstone
+  labels:
+    app: db-restore
+spec:
+  backoffLimit: 0                 # a failed restore needs a human, not a retry
+  template:
+    metadata:
+      labels:
+        app: db-restore
+        db-access: "true"         # NetworkPolicy: allowed to reach the database
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70
+        runAsGroup: 70
+        fsGroup: 70
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: restore
+          image: postgres:16-alpine
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              latest=$(ls -1t /backups/*.sql.gz | head -n 1)
+              echo "restoring $latest"
+              gunzip -c "$latest" | psql -X -q -v ON_ERROR_STOP=1 > /dev/null
+              echo "restore done: $(psql -X -t -A -c 'SELECT count(*) FROM items') rows in items"
+          env:
+            - name: PGHOST
+              value: db
+            - name: PGUSER
+              valueFrom: { secretKeyRef: { name: db-credentials, key: POSTGRES_USER } }
+            - name: PGPASSWORD
+              valueFrom: { secretKeyRef: { name: db-credentials, key: POSTGRES_PASSWORD } }
+            - name: PGDATABASE
+              valueFrom: { secretKeyRef: { name: db-credentials, key: POSTGRES_DB } }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: backups
+              mountPath: /backups
+              readOnly: true
+          resources:
+            requests: { cpu: 20m, memory: 32Mi }
+            limits:   { cpu: 500m, memory: 128Mi }
+      volumes:
+        - name: backups
+          persistentVolumeClaim:
+            claimName: db-backups

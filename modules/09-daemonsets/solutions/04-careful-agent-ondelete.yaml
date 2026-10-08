@@ -1,0 +1,47 @@
+# Solution to exercise 4 - updateStrategy: OnDelete.
+#
+# The controller never replaces running pods on its own. After a template
+# change, each node keeps the old version until you delete that node's pod.
+# Useful for agents where a restart is disruptive (CNI plugins, storage
+# drivers) and an operator wants to roll node by node, e.g. together with
+# draining the node.
+#
+#   kubectl apply -f solutions/04-careful-agent-ondelete.yaml
+#   kubectl set env ds/careful-agent -n lab-daemonsets AGENT_VERSION=2.0
+#   kubectl get pods -n lab-daemonsets -l app=careful-agent -L controller-revision-hash   # unchanged
+#   kubectl delete pod -n lab-daemonsets -l app=careful-agent \
+#     --field-selector spec.nodeName=kube-training-worker                  # one node only
+#   kubectl logs -n lab-daemonsets -l app=careful-agent --prefix            # 2.0 on worker, 1.0 on worker2
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: careful-agent
+  namespace: lab-daemonsets
+  labels:
+    app: careful-agent
+spec:
+  selector:
+    matchLabels:
+      app: careful-agent
+  updateStrategy:
+    type: OnDelete
+  template:
+    metadata:
+      labels:
+        app: careful-agent
+    spec:
+      terminationGracePeriodSeconds: 5
+      containers:
+        - name: agent
+          image: busybox:1.37
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: AGENT_VERSION
+              value: "1.0"
+          command: ["sh", "-c", "trap 'exit 0' TERM; echo \"careful-agent v$AGENT_VERSION on $NODE_NAME\"; sleep 36000 & wait $!"]
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 50m, memory: 32Mi }

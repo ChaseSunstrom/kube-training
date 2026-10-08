@@ -1,4 +1,4 @@
-# 09 - Native sidecar containers (stable since Kubernetes 1.33).
+# 09 - Native sidecar containers (GA since Kubernetes 1.33).
 #
 # A sidecar is a helper that must run for the WHOLE life of the app container:
 # log shippers, proxies (service mesh), config reloaders. Declare it as an

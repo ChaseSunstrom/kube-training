@@ -1,0 +1,52 @@
+# Exercise 1 - an HPA that can never work.
+#
+# Apply this (with metrics-server running), wait a minute, and find out from
+#   kubectl -n lab-autoscaling get hpa no-request
+#   kubectl -n lab-autoscaling describe hpa no-request
+# why TARGETS stays <unknown>. Then fix the Deployment.
+# Solution: ../solutions/01-with-request.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: no-request
+  namespace: lab-autoscaling
+  labels:
+    app: no-request
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: no-request
+  template:
+    metadata:
+      labels:
+        app: no-request
+    spec:
+      containers:
+        - name: whoami
+          image: traefik/whoami:v1.10
+          resources:
+            limits:
+              memory: 64Mi       # a memory limit, but no CPU request at all
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: no-request
+  namespace: lab-autoscaling
+  labels:
+    app: no-request
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: no-request
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 50

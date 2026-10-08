@@ -1,0 +1,24 @@
+# Exercise 5 - "the Service doesn't work". Two bugs, find both.
+#
+#   kubectl apply -f modules/04-services/exercises/broken-service.yaml
+#   kubectl exec -n lab-services client -- curl -s -m 2 http://shop-frontend   # fails
+#
+# Debug it the systematic way, from the outside in:
+#   1. Does the Service exist, with the port you expect?     kubectl get svc
+#   2. Does it have endpoints?                                kubectl get endpointslices -l kubernetes.io/service-name=...
+#   3. Are the endpoints ready, and on the right port?        -o yaml
+#   4. Does the pod answer directly on that port?             curl <pod IP>:<port>
+apiVersion: v1
+kind: Service
+metadata:
+  name: shop-frontend
+  namespace: lab-services
+  labels:
+    app: whoami
+spec:
+  selector:
+    app: whoami-frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080

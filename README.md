@@ -89,10 +89,10 @@ checkboxes is in [`docs/learning-path.md`](docs/learning-path.md).
 make help            # list targets
 make cluster-up      # create the kind cluster
 make cluster-down    # delete it
-make validate        # schema-check every manifest (kubeconform) — offline-friendly
-make validate-server # server-side dry-run of every manifest against your cluster
+make validate        # schema-check every manifest, Kustomize overlay and the Helm chart (kubeconform)
+make check-links     # check every relative link in the Markdown
 make test-scenario   # run the RWO ordered-pods scenario end-to-end on your cluster
 ```
 
-CI (`.github/workflows/validate.yaml`) runs the schema check on every push and
-runs the RWO scenario tests on a real kind cluster.
+CI (`.github/workflows/validate.yaml`) runs the schema and link checks on every
+push and runs the RWO scenario tests on a real kind cluster.

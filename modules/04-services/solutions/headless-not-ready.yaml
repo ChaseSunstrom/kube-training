@@ -1,0 +1,27 @@
+# Exercise 2 - solution: a headless Service that also publishes NOT-ready pods.
+#
+# publishNotReadyAddresses: true makes DNS (and the EndpointSlice "ready"
+# semantics used by DNS) include pods that fail their readiness probe.
+# StatefulSet peers use this to find each other BEFORE they are ready
+# (e.g. a database cluster forming its first quorum).
+#
+#   kubectl apply -f modules/04-services/solutions/headless-not-ready.yaml
+#   # make one pod unready (Lab step 5), then compare:
+#   kubectl exec -n lab-services client -- dig +short whoami-headless.lab-services.svc.cluster.local      # 2 IPs
+#   kubectl exec -n lab-services client -- dig +short whoami-headless-all.lab-services.svc.cluster.local  # 3 IPs
+apiVersion: v1
+kind: Service
+metadata:
+  name: whoami-headless-all
+  namespace: lab-services
+  labels:
+    app: whoami
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app: whoami
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

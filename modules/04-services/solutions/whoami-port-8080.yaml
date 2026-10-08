@@ -1,0 +1,47 @@
+# Exercise 4 - solution: move the app to port 8080 without touching any Service.
+#
+# whoami reads its port from WHOAMI_PORT_NUMBER. The container port keeps the
+# NAME `http`, so every Service with `targetPort: http` (and the readiness
+# probe with `port: http`) follows automatically. A Service with
+# `targetPort: 80` (a number) would now be broken.
+#
+#   kubectl apply -f modules/04-services/solutions/whoami-port-8080.yaml
+#   kubectl rollout status deployment/whoami -n lab-services
+#   kubectl get endpointslices -n lab-services -l kubernetes.io/service-name=whoami   # PORTS 8080
+#   kubectl exec -n lab-services client -- curl -s http://whoami | grep Hostname     # still works on port 80
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: whoami
+  namespace: lab-services
+  labels:
+    app: whoami
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: whoami
+  template:
+    metadata:
+      labels:
+        app: whoami
+    spec:
+      containers:
+        - name: whoami
+          image: traefik/whoami:v1.10
+          env:
+            - name: WHOAMI_PORT_NUMBER
+              value: "8080"
+          ports:
+            - name: http             # same name...
+              containerPort: 8080    # ...new number
+          readinessProbe:
+            # Not Ready -> removed from every Service's endpoints (step 5).
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 2
+            failureThreshold: 1
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 100m, memory: 32Mi }

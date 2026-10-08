@@ -45,6 +45,12 @@ configMapGenerator:
   - name: frontend-html
     files:
       - files/index.html
+  # No hash for the seed SQL: a Job's pod template is immutable, so a new
+  # ConfigMap name would make every later `kubectl apply` fail on the Job
+  # ("field is immutable"). To re-seed after editing seed.sql:
+  #   kubectl -n lab-capstone delete job db-seed && kubectl apply -k <overlay>
   - name: db-seed
     files:
       - files/seed.sql
+    options:
+      disableNameSuffixHash: true

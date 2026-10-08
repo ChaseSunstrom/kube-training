@@ -1,0 +1,50 @@
+# Solution to exercise 4.
+#
+# NetworkPolicy ports are POD ports. Port 9090 only exists on the Service;
+# by the time the packet reaches the backend pod it is addressed to 8080
+# (targetPort "admin"). Allow the pod's port - by number or, better, by its
+# name, so the policy survives a change of the containerPort.
+# The egress policy is only needed if lab-netpol has default-deny-egress (08).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend-allow-admin-9090
+  namespace: lab-netpol
+  labels:
+    app: backend
+spec:
+  podSelector:
+    matchLabels:
+      app: backend
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: frontend
+      ports:
+        - protocol: TCP
+          port: admin          # 8080 on the pod, NOT the Service's 9090
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: frontend-allow-egress-to-admin
+  namespace: lab-netpol
+  labels:
+    app: frontend
+spec:
+  podSelector:
+    matchLabels:
+      app: frontend
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: backend
+      ports:
+        - protocol: TCP
+          port: 8080

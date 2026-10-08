@@ -73,8 +73,9 @@ Pod-level, applies to all regular containers:
 | `OnFailure` | done | restart | `Succeeded` |
 | `Never` | done | done | `Succeeded` or `Failed` |
 
-Restarts use an exponential back-off (10s, 20s, 40s … capped at 5 min, reset
-after 10 minutes of running fine). While the kubelet waits, the container is
+The first restart is immediate; after that the kubelet backs off
+exponentially (10s, 20s, 40s … capped at 5 min, reset after 10 minutes of
+running fine). While the kubelet waits, the container is
 `Waiting` with reason `CrashLoopBackOff`. CrashLoopBackOff is not an error in
 itself – it is the kubelet *pacing* restarts of a container that keeps exiting.
 
@@ -197,9 +198,8 @@ kubectl describe pod too-big -n lab-pods | tail -3
 NAME      READY   STATUS    RESTARTS   AGE
 too-big   0/1     Pending   0          1s
 
-  Warning  FailedScheduling  1s  default-scheduler  0/3 nodes are available: 1 node(s) had untolerated
-  taint {node-role.kubernetes.io/control-plane: }, 2 Insufficient cpu. preemption: 0/3 nodes are available:
-  1 Preemption is not helpful for scheduling, 2 No preemption victims found for incoming pod.
+  Warning  FailedScheduling  2s  default-scheduler  0/3 nodes are available: 1 node(s) had untolerated
+  taint(s), 2 Insufficient cpu. preemption: 0/3 nodes are available: 3 Preemption is not helpful for scheduling.
 ```
 
 Read the message like the scheduler does: of 3 nodes, the control plane is
@@ -446,8 +446,7 @@ What happened:
 
 With a classic sidecar (a second entry in `containers`) step 3 never
 happens and the pod runs forever – try it in exercise 3. Native sidecars are
-stable (GA) in Kubernetes 1.33 and are what service meshes and log agents
-now use.
+GA since Kubernetes 1.33 and are what service meshes and log agents now use.
 
 ### 9. Probes on a healthy app
 
@@ -467,7 +466,7 @@ kubectl describe pod probes-demo -n lab-pods | grep Unhealthy
 ```
 NAME          READY   STATUS    RESTARTS   AGE
 probes-demo   0/1     Running   0          7s
-  Warning  Unhealthy  1s (x2 over 1s)  kubelet  Readiness probe failed: HTTP probe failed with statuscode: 404
+  Warning  Unhealthy  1s (x2 over 1s)  kubelet  spec.containers{nginx}: Readiness probe failed: HTTP probe failed with statuscode: 404
 ```
 
 `READY 0/1`, but `RESTARTS 0`: a failing readiness probe never restarts
@@ -497,10 +496,10 @@ kubectl describe pod liveness-fail -n lab-pods | grep -A12 '^Events'
 
 ```
   Normal   Scheduled  73s               default-scheduler  Successfully assigned lab-pods/liveness-fail to kube-training-worker2
-  Normal   Created    2s (x3 over 71s)  kubelet            Created container: app
-  Warning  Unhealthy  2s (x6 over 47s)  kubelet            Liveness probe failed: cat: can't open '/tmp/healthy': No such file or directory
-  Normal   Killing    2s (x2 over 37s)  kubelet            Container app failed liveness probe, will be restarted
-  Normal   Started    1s (x3 over 70s)  kubelet            Started container app
+  Normal   Created    2s (x3 over 71s)  kubelet            spec.containers{app}: Container created
+  Warning  Unhealthy  2s (x6 over 47s)  kubelet            spec.containers{app}: Liveness probe failed: cat: can't open '/tmp/healthy': No such file or directory
+  Normal   Killing    2s (x2 over 37s)  kubelet            spec.containers{app}: Container app failed liveness probe, will be restarted
+  Normal   Started    1s (x3 over 70s)  kubelet            spec.containers{app}: Container started
 ```
 
 ```bash
@@ -579,11 +578,11 @@ OOMKilled 137
 
 Exit code 137 = 128 + 9: killed by SIGKILL, from the kernel, with no chance
 to clean up or log anything. The kernel kills a process when the container's
-cgroup exceeds its memory limit. On cgroup v2 hosts (most current Linux
-distributions, Docker Desktop) Kubernetes ≥ 1.28 kills **all** processes in
-the container together; on old cgroup v1 hosts only the process the kernel
-picks dies – which is why the manifest `exec`s `dd` to make it the main
-process either way. The fix in real life is a higher limit or a smaller
+cgroup exceeds its memory limit. On cgroup v2 hosts (which current
+Kubernetes expects) the kubelet configures the container so that **all** its
+processes are killed together; on legacy cgroup v1 hosts only the process the
+kernel picks dies, and a container whose main process survives keeps running
+– which is why the manifest `exec`s `dd` to make it the main process. The fix in real life is a higher limit or a smaller
 memory footprint, never "more restarts".
 
 ```bash
@@ -603,13 +602,13 @@ In terminal 2:
 time kubectl delete pod graceful -n lab-pods
 ```
 
-Terminal 1 shows the whole shutdown sequence, and `time` reports ~8–9 seconds:
+Terminal 1 shows the whole shutdown sequence, and `time` reports about 8–10 seconds:
 
 ```
-10:27:07 started, waiting for work
-10:27:09 preStop hook: draining for 5s
-10:27:14 got SIGTERM - finishing in-flight work
-10:27:17 clean exit
+11:14:03 started, waiting for work
+11:14:04 preStop hook: draining for 5s
+11:14:09 got SIGTERM - finishing in-flight work
+11:14:12 clean exit
 ```
 
 preStop ran first (5s), *then* SIGTERM arrived, the handler finished its
@@ -620,9 +619,9 @@ time kubectl delete pod stubborn -n lab-pods
 ```
 
 ```
-pod "stubborn" deleted
+pod "stubborn" deleted from lab-pods namespace
 
-real	0m10.901s
+real	0m11.018s
 ```
 
 `sleep` is PID 1 and has no SIGTERM handler, so SIGTERM was ignored and the
@@ -654,7 +653,7 @@ Exercise 5 fixes it.
    *Hint:* one block moves, one line is added.
    Solution: [`solutions/native-sidecar.yaml`](solutions/native-sidecar.yaml).
 
-4. **Resize a running pod (Kubernetes 1.33, beta).** Change the CPU request of
+4. **Resize a running pod.** Change the CPU request of
    `qos-burstable` to `20m` and its limit to `200m` **without restarting it**,
    then try the same trick to lower the CPU request of `qos-guaranteed`.
    *Hint:* `kubectl patch pod qos-burstable -n lab-pods --subresource resize --patch '{"spec":{"containers":[{"name":"app","resources":{"requests":{"cpu":"20m"},"limits":{"cpu":"200m"}}}]}}'`;
