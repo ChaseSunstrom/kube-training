@@ -3,8 +3,9 @@
 #   kubectl patch job suspended -n lab-jobs --type merge -p '{"spec":{"suspend":false}}'
 #
 # Setting suspend: true on a RUNNING Job terminates its active pods (the
-# completed count is kept) and resuming starts new ones. While suspended,
-# activeDeadlineSeconds is paused too.
+# completed count is kept) and resuming starts new ones. Suspending also
+# stops the activeDeadlineSeconds clock, and resuming restarts it from zero
+# (status.startTime is reset).
 # Queueing systems such as Kueue create Jobs suspended and un-suspend them
 # when the cluster has capacity - that is what this field was built for.
 apiVersion: batch/v1

@@ -15,7 +15,9 @@
 #     to select pods (pod IPs change) - use pod/namespace selectors.
 #
 # 172.16.0.0/12 covers the address pools Docker uses for its networks
-# (kind's "kind" network is usually 172.18.0.0/16). On a real cluster you'd
+# (kind's "kind" network is usually 172.18.0.0/16). If the endpoint IP you
+# found is outside that range (podman, a custom Docker address pool), put
+# that IP with /32 here instead. On a real cluster you'd
 # write the exact control-plane addresses (/32 each). A classic "except":
 # allow the internet but not the cloud metadata service:
 #   - ipBlock: {cidr: 0.0.0.0/0, except: [169.254.169.254/32]}

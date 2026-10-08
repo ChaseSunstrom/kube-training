@@ -63,8 +63,11 @@ desiredReplicas = ceil( currentReplicas × currentMetricValue / targetValue )
 * Ratios within the **tolerance** (default 10%) are ignored, so it doesn't flap
   around the target.
 * Several metrics → one recommendation per metric → the **highest** wins.
-* Not-yet-ready pods and pods with missing metrics are treated
-  conservatively (assumed 0% when scaling up, 100% when scaling down).
+* Pods are treated conservatively when their data can't be trusted: pods
+  with **missing metrics** are assumed to use 0% of the target when the HPA
+  would scale up and 100% when it would scale down; **not-yet-ready** pods
+  are assumed to use 0% on a scale-up and are simply left out of a
+  scale-down calculation. Both damp over-reaction.
 * The result is clamped to `[minReplicas, maxReplicas]` and then shaped by
   `behavior`.
 

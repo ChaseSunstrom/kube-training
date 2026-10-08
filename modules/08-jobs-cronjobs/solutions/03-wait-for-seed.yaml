@@ -13,8 +13,8 @@
 #   kubectl apply -f solutions/03-wait-for-seed.yaml     # app waits (Init:0/2)
 #   kubectl apply -f 14-job-seed.yaml                    # ... and starts when the seed is done
 #
-# Caveat: 14-job-seed.yaml sets ttlSecondsAfterFinished: 3600. Once the Job
-# has been garbage-collected, a restarted app pod waits for a Job that will
+# That's why 14-job-seed.yaml has no ttlSecondsAfterFinished: once a gated
+# Job is garbage-collected, a restarted app pod waits for a Job that will
 # never come back. Don't put a TTL on a Job that something gates on (see the
 # RWO scenario below).
 #

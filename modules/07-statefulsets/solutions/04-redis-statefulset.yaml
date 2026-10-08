@@ -8,7 +8,7 @@
 # the last snapshot. --appendonly yes logs every write to /data as it happens.
 # Simulate a crash and compare:
 #   kubectl exec -n lab-statefulsets redis-0 -- redis-cli set crash-test 1
-#   kubectl exec -n lab-statefulsets redis-0 -- redis-cli shutdown nosave   # exit without saving
+#   kubectl exec -n lab-statefulsets redis-0 -- redis-cli shutdown nosave   # exit without saving (exec ends with code 137)
 #   # ... a few seconds later the container has restarted (RESTARTS 1):
 #   kubectl exec -n lab-statefulsets redis-0 -- redis-cli get crash-test   # 1 with AOF, empty without
 #

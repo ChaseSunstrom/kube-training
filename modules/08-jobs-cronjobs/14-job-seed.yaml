@@ -27,7 +27,10 @@ metadata:
 spec:
   backoffLimit: 3
   activeDeadlineSeconds: 300
-  ttlSecondsAfterFinished: 3600     # keep it an hour for inspection
+  # No ttlSecondsAfterFinished on purpose: other things may gate on this Job
+  # (solutions/03-wait-for-seed.yaml waits for it to be Complete). If the
+  # finished Job were garbage-collected, a restarted app pod would wait for a
+  # Job that never comes back. Delete it yourself when you re-seed.
   template:
     metadata:
       labels:

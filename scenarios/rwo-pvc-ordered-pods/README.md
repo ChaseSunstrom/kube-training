@@ -288,7 +288,7 @@ PASS scheduler kept web Pending while the seed pod held the claim (FailedSchedul
 | Mistake | Symptom | Avoided by |
 |---|---|---|
 | Pods on different nodes | Pending (`didn't match PersistentVolume's node affinity`) or `Multi-Attach error` | Co-location group affinity |
-| `RollingUpdate` on an RWO/RWOP Deployment | New pod on another node can't attach (RWO) or can't schedule at all (RWOP) while the old one waits for it to be Ready → rollout stuck until `progressDeadlineSeconds` | `strategy: Recreate` |
+| `RollingUpdate` on an RWO/RWOP Deployment | New pod on another node can't attach (RWO) or can't schedule at all (RWOP) while the old one waits for it to be Ready → rollout stuck (after `progressDeadlineSeconds` it is only *marked* failed, nothing rolls back) | `strategy: Recreate` |
 | RWOP + B waits for A inside B | **Deadlock** if B is scheduled first: B owns the claim, A can never run. See [`broken/02`](broken/02-rwop-init-wait-deadlock.yaml) | Pattern 4: B doesn't exist until A is done |
 | `ttlSecondsAfterFinished` on the seed Job | Job is garbage-collected; the next pod B (after a drain or restart) waits forever for a Job that no longer exists | No TTL on the seed Job (or wait on a marker instead) |
 | Marker file as the only signal | After a redeploy B sees the *old* marker and starts before the new A finished | Wait on Job status (P1) or readiness (P2); A deletes the marker before it starts (P1) |

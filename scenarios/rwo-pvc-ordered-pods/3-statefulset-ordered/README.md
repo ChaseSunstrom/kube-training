@@ -88,7 +88,8 @@ and Ready. No init containers, no RBAC.
 | Operation | Order |
 |---|---|
 | Initial creation / scale up | 0, 1, 2… each waits for the previous one to be Running + Ready |
-| Scale down / delete | highest ordinal first, each waits for the previous to terminate |
+| Scale down | highest ordinal first, each waits for the previous to terminate |
+| Deleting the StatefulSet object | **no ordering** — pods are terminated in no particular order (scale to 0 first if order matters) |
 | Rolling update | highest ordinal first (1, then 0) |
 | A single pod crashes/restarts later | **no ordering** — other pods keep running |
 

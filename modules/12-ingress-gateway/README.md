@@ -121,8 +121,8 @@ differ on the standard parts.
 * **GA and versioned:** `gateway.networking.k8s.io/v1` (GatewayClass, Gateway,
   HTTPRoute, GRPCRoute, ReferenceGrant…). The API ships as CRDs, installed
   separately from Kubernetes, in a *standard* and an *experimental* channel.
-  This module uses the standard channel of **v1.6.2**, the version Traefik
-  v3.7 supports.
+  This module uses the standard channel of **v1.6.2**, a patch release of
+  the Gateway API v1.6 that Traefik v3.7 implements.
 * **Expressive and portable:** header/query matching, rewrites, redirects,
   header modification and weighted backends are part of the spec, with
   precise precedence rules and conformance tests.

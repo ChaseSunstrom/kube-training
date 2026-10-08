@@ -51,11 +51,11 @@ checkboxes is in [`docs/learning-path.md`](docs/learning-path.md).
 | 09 | [DaemonSets](modules/09-daemonsets/README.md) | Per-node agents, tolerations, update strategy |
 | 10 | [Scheduling](modules/10-scheduling/README.md) | nodeSelector, (anti-)affinity, taints/tolerations, topology spread, priority |
 | 11 | [RBAC](modules/11-rbac/README.md) | ServiceAccounts, Roles, ClusterRoles, bindings, `kubectl auth can-i` |
-| 12 | [Ingress & Gateway API](modules/12-ingress-gateway/README.md) | Ingress, ingress controllers, Gateway API, host/path routing, TLS |
+| 12 | [Ingress & Gateway API](modules/12-ingress-gateway/README.md) | Ingress and Gateway API with Traefik, host/path/header routing, TLS, traffic splitting |
 | 13 | [NetworkPolicies](modules/13-network-policies/README.md) | Default deny, allow-lists, namespace selectors, egress control |
-| 14 | [Autoscaling](modules/14-autoscaling/README.md) | metrics-server, HPA, load testing, scaling behaviour |
+| 14 | [Autoscaling](modules/14-autoscaling/README.md) | metrics-server, HPA, load testing, scaling behaviour, in-place pod resize |
 | 15 | [Security](modules/15-security/README.md) | securityContext, Pod Security Admission, non-root, read-only FS, capabilities |
-| 16 | [Debugging](modules/16-debugging/README.md) | Logs, events, exec, ephemeral containers, 8 broken apps to fix |
+| 16 | [Debugging](modules/16-debugging/README.md) | Logs, events, exec, ephemeral containers, 10 broken apps to fix |
 | 17 | [Kustomize](modules/17-kustomize/README.md) | Bases, overlays, patches, generators, image overrides |
 | 18 | [Helm](modules/18-helm/README.md) | Charts, templates, values, releases, upgrades, rollbacks |
 | 19 | [Capstone](modules/19-capstone/README.md) | Build a full app: web + API + database, config, storage, ingress, HPA, policies |

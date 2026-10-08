@@ -333,7 +333,8 @@ REVISION  CHANGE-CAUSE
    [`solutions/06-hostport-agent.yaml`](solutions/06-hostport-agent.yaml).
    The surge pod stays `Pending` with
    `1 node(s) didn't have free ports for the requested pod ports`, and the
-   rollout hangs until you go back to `maxSurge: 0`.
+   rollout hangs until you go back to `maxSurge: 0, maxUnavailable: 1`
+   (setting only `maxSurge: 0` is rejected: both can't be 0).
 
 ## Cleanup
 

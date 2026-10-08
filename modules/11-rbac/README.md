@@ -58,8 +58,9 @@ group `kubeadm:cluster-admins`, which a ClusterRoleBinding maps to
 ### ServiceAccount tokens
 
 Pods get **bound, projected tokens** (the default since Kubernetes 1.22), and
-since 1.24 the old long-lived token Secrets are no longer created automatically; leftover
-auto-generated ones that sit unused are invalidated and eventually deleted.
+since 1.24 the old long-lived token Secrets are no longer created
+automatically; leftover auto-generated ones that sit unused are invalidated
+and eventually deleted.
 (You can still create such a Secret by hand – type
 `kubernetes.io/service-account-token` – but it never expires; avoid it.) The kubelet requests a token via the TokenRequest
 API and mounts it, together with the cluster CA and the namespace, at

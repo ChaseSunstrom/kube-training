@@ -10,8 +10,9 @@
 # matches in a rule are ORed. When several rules match a request, the most
 # specific one wins - NOT the first one in the file:
 #   1. the longest matching path (Exact beats PathPrefix of the same length)
-#   2. then the most header matches
-#   3. then the most query-parameter matches
+#   2. then a method match
+#   3. then the most header matches
+#   4. then the most query-parameter matches
 # That's why the canary rule repeats the /v1 path: a rule with ONLY the
 # header (implicit path prefix "/") would lose to "/v1" for every /v1 request.
 #
