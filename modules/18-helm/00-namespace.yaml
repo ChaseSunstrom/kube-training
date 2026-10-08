@@ -1,8 +1,9 @@
 # Module 18 - Helm
 #
 # Helm can create the namespace for you (--create-namespace), but then nobody
-# owns it: `helm uninstall` never deletes it, and you can't label it. So we
-# create it ourselves - with Pod Security labels. Our chart passes the
+# owns it: `helm uninstall` never deletes it, and it is created without the
+# labels you want (you'd have to add them afterwards, by hand). So we create
+# it ourselves - with Pod Security labels from the start. Our chart passes the
 # "restricted" level (module 15); public charts may not, which is why this
 # namespace only WARNS about restricted and enforces baseline.
 #

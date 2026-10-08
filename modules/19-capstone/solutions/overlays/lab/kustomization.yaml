@@ -30,6 +30,8 @@ secretGenerator:
       - db.env
     options:
       disableNameSuffixHash: true
+      labels:
+        app: db
 
 # Pin the frontend image by digest (module 15/17): the tag stays readable,
 # the digest guarantees the exact bytes.

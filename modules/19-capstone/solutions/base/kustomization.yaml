@@ -39,12 +39,21 @@ configMapGenerator:
   - name: backend-app
     files:
       - files/api.sh
+    options:
+      labels:
+        app: backend
   - name: frontend-nginx
     files:
       - files/default.conf
+    options:
+      labels:
+        app: frontend
   - name: frontend-html
     files:
       - files/index.html
+    options:
+      labels:
+        app: frontend
   # No hash for the seed SQL: a Job's pod template is immutable, so a new
   # ConfigMap name would make every later `kubectl apply` fail on the Job
   # ("field is immutable"). To re-seed after editing seed.sql:
@@ -54,3 +63,5 @@ configMapGenerator:
       - files/seed.sql
     options:
       disableNameSuffixHash: true
+      labels:
+        app: db-seed

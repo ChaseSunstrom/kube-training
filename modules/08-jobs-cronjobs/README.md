@@ -102,7 +102,7 @@ That suffix is why CronJob names are limited to 52 characters.
 | `schedule` | 5-field cron: `minute hour day-of-month month day-of-week`, e.g. `"30 2 * * 1-5"`, or macros like `@daily` |
 | `timeZone` | IANA zone such as `"Europe/Berlin"`. Without it, the controller manager's local time zone is used. `CRON_TZ=` inside `schedule` is rejected. |
 | `concurrencyPolicy` | `Allow` (default): overlapping runs are fine. `Forbid`: skip a run while the previous one is active. `Replace`: delete the active run and start the new one. |
-| `startingDeadlineSeconds` | how late a run may still start (controller down, Forbid blocking). Later than that and it's counted as missed. Without it, if more than 100 schedules were missed (after a long outage, say), the controller refuses to start the Job and logs an error. |
+| `startingDeadlineSeconds` | how late a run may still start (controller down, Forbid blocking). Later than that and it's counted as missed. Without it, if more than 100 schedules were missed (after a long outage, say), the controller emits a `TooManyMissedTimes` warning event; it still starts only the most recent missed run, never one per missed schedule. |
 | `successfulJobsHistoryLimit` / `failedJobsHistoryLimit` | how many finished Jobs to keep |
 | `suspend` | pause future runs (running Jobs are not touched) |
 
@@ -583,11 +583,13 @@ kubectl patch cronjob slow -n lab-jobs -p '{"spec":{"suspend":true}}'
 
 3. **Gate the app on the seed Job.** Make a Deployment whose pods don't start
    until `job/seed-redis` is Complete, without any external script.
-   *Hint:* an init container with `rancher/kubectl:v1.36.2` running
-   `kubectl wait`, plus a ServiceAccount allowed to `get`/`list`/`watch` Jobs.
+   *Hint:* init containers with `rancher/kubectl:v1.36.2` running
+   `kubectl wait --for=create`, then `kubectl wait --for=condition=complete`
+   (the latter fails at once if the Job doesn't exist yet), plus a
+   ServiceAccount allowed to `get`/`list`/`watch` Jobs.
    Solution: [`solutions/03-wait-for-seed.yaml`](solutions/03-wait-for-seed.yaml).
    Delete `seed-redis` first, apply the solution (the pod sits in
-   `Init:0/1`), then apply `14-job-seed.yaml` and watch the app start.
+   `Init:0/2`), then apply `14-job-seed.yaml` and watch the app start.
 
 4. **Done when the leader is done.** An Indexed Job has 4 indexes. Index 0
    finishes in 5s, the others would take 5 minutes. Make the Job `Complete`

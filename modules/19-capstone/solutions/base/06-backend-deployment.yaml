@@ -18,7 +18,10 @@ metadata:
   labels:
     app: backend
 spec:
-  replicas: 2
+  # No `replicas:` - the HPA (09-backend-hpa.yaml) owns the replica count
+  # (module 14). If it were set here, every `kubectl apply -k` would reset it
+  # and fight the HPA. A fresh deploy starts with 1 pod; the HPA raises it to
+  # minReplicas (2) within ~15 s, even before metrics are available.
   revisionHistoryLimit: 5
   strategy:
     type: RollingUpdate

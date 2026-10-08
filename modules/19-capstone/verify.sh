@@ -15,12 +15,17 @@
 #   SKIP_NETPOL_ENFORCEMENT=1    report NetworkPolicy *enforcement* failures as
 #                                WARN (for CNIs that don't enforce policies)
 #   INGRESS_URL=http://capstone.localtest.me   where to test the Ingress
+#   INGRESS_ADDR=172.18.0.2      instead: send the request to this address with
+#                                "Host: capstone.localtest.me" (no DNS or
+#                                localhost:80 mapping needed), e.g. a node IP from
+#                                `kubectl get nodes -o wide`
 #
 # Exit code: 0 if every check passed (warnings allowed), 1 otherwise.
 set -u
 
 NS="${NS:-lab-capstone}"
 INGRESS_URL="${INGRESS_URL:-http://capstone.localtest.me}"
+INGRESS_ADDR="${INGRESS_ADDR:-}"
 PASS=0; FAIL=0; WARN=0
 PF_PID=""
 
@@ -202,9 +207,15 @@ fi
 section "9. Ingress"
 ing=$(k get ingress -o jsonpath='{range .items[*]}{range .spec.rules[*]}{.host}|{.http.paths[*].backend.service.name}{"\n"}{end}{end}' | grep '^capstone.localtest.me|')
 case "$ing" in *frontend*) pass "Ingress routes capstone.localtest.me to Service frontend";; *) fail "no Ingress rule for host capstone.localtest.me -> frontend";; esac
-code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$INGRESS_URL/api/items" 2>/dev/null)
-[ "$code" = 200 ] && pass "$INGRESS_URL/api/items -> 200 through the ingress controller" \
-                  || warn "$INGRESS_URL/api/items -> ${code:-no answer} (no ingress controller on localhost:80? module 12)"
+if [ -n "$INGRESS_ADDR" ]; then
+  target="http://$INGRESS_ADDR/api/items (Host: capstone.localtest.me)"
+  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 -H 'Host: capstone.localtest.me' "http://$INGRESS_ADDR/api/items" 2>/dev/null)
+else
+  target="$INGRESS_URL/api/items"
+  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$INGRESS_URL/api/items" 2>/dev/null)
+fi
+[ "$code" = 200 ] && pass "$target -> 200 through the ingress controller" \
+                  || warn "$target -> ${code:-no answer} (no ingress controller on localhost:80? module 12)"
 
 # ---------------------------------------------------------------------------
 section "10. Backups (CronJob db-backup)"

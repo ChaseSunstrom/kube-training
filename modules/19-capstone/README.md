@@ -203,7 +203,7 @@ process itself in the probe; report dependency health on a separate endpoint
 | [`solutions/base/03-db-seed-job.yaml`](solutions/base/03-db-seed-job.yaml) | Job that waits for the DB and runs `seed.sql` |
 | [`solutions/base/04-db-backup-pvc.yaml`](solutions/base/04-db-backup-pvc.yaml) | RWO PVC for dumps |
 | [`solutions/base/05-db-backup-cronjob.yaml`](solutions/base/05-db-backup-cronjob.yaml) | nightly `pg_dump --clean --if-exists`, keeps 5, `concurrencyPolicy: Forbid`, `timeZone` |
-| [`solutions/base/06-backend-deployment.yaml`](solutions/base/06-backend-deployment.yaml) | backend: 2 replicas, zone spread, probes, `maxUnavailable: 0` rollouts |
+| [`solutions/base/06-backend-deployment.yaml`](solutions/base/06-backend-deployment.yaml) | backend: replicas owned by the HPA (min 2), zone spread, probes, `maxUnavailable: 0` rollouts |
 | [`solutions/base/07-backend-service.yaml`](solutions/base/07-backend-service.yaml) | Service `backend` :8080 |
 | [`solutions/base/08-backend-pdb.yaml`](solutions/base/08-backend-pdb.yaml) / [`12-frontend-pdb.yaml`](solutions/base/12-frontend-pdb.yaml) | PodDisruptionBudgets |
 | [`solutions/base/09-backend-hpa.yaml`](solutions/base/09-backend-hpa.yaml) | HPA 2-5 replicas at 70% CPU |
@@ -348,6 +348,20 @@ controller? Find its class with `kubectl get ingressclass` and change it in
 
 ```bash
 ./modules/19-capstone/verify.sh
+```
+
+The Ingress check (section 9) calls `http://capstone.localtest.me`, i.e.
+localhost:80 through kind's port mapping. If that mapping isn't available
+(another cluster, a remote machine), point the check at any address the
+controller listens on and let the script send the `Host` header. (Node IPs
+of kind clusters are reachable from the host on Linux; with Docker Desktop on
+macOS/Windows they aren't, so stick to the localhost mapping there.)
+
+```bash
+INGRESS_ADDR=$(kubectl get node kube-training-control-plane \
+  -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}') \
+  ./modules/19-capstone/verify.sh
+#   PASS http://172.18.0.5/api/items (Host: capstone.localtest.me) -> 200 through the ingress controller
 ```
 
 Real output from the reference solution on a kind cluster (trimmed). It was

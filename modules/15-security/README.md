@@ -59,7 +59,7 @@ settings; `spec.containers[].securityContext` overrides per container.
 | `capabilities.drop` / `add` | container | remove / add Linux capabilities | **yes**: drop `ALL`, add only `NET_BIND_SERVICE` |
 | `readOnlyRootFilesystem: true` | container | image filesystem is read-only; use `emptyDir` for scratch space | no (do it anyway) |
 | `privileged: true` | container | everything: all caps, all devices, no seccomp. Almost never needed by apps | forbidden (already by `baseline`) |
-| `appArmorProfile` / `seLinuxOptions` | both | LSM confinement (node must support it) | restricted limits the values |
+| `appArmorProfile` / `seLinuxOptions` | both | LSM confinement (node must support it) | baseline (and so restricted) limits the values |
 
 ### Linux capabilities in 60 seconds
 

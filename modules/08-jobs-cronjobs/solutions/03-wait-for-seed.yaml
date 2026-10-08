@@ -1,14 +1,22 @@
 # Solution to exercise 3 - start the app only after the seed Job succeeded,
 # without an external pipeline.
 #
-# An init container runs `kubectl wait` against the API server. The app
-# container cannot start until it exits 0, i.e. until job/seed-redis has the
-# Complete condition. The pod's ServiceAccount needs permission to read Jobs
+# Two init containers run `kubectl wait` against the API server. The app
+# container cannot start until both exit 0, i.e. until job/seed-redis exists
+# AND has the Complete condition. The first one is needed because
+# `kubectl wait --for=condition=...` on a Job that doesn't exist yet fails at
+# once (NotFound): the init container would crash-loop with growing back-off
+# instead of waiting. The pod's ServiceAccount needs permission to read Jobs
 # (RBAC: modules/11-rbac).
 #
 #   kubectl delete job seed-redis -n lab-jobs --ignore-not-found
-#   kubectl apply -f solutions/03-wait-for-seed.yaml     # app waits (Init:0/1)
+#   kubectl apply -f solutions/03-wait-for-seed.yaml     # app waits (Init:0/2)
 #   kubectl apply -f 14-job-seed.yaml                    # ... and starts when the seed is done
+#
+# Caveat: 14-job-seed.yaml sets ttlSecondsAfterFinished: 3600. Once the Job
+# has been garbage-collected, a restarted app pod waits for a Job that will
+# never come back. Don't put a TTL on a Job that something gates on (see the
+# RWO scenario below).
 #
 # Alternatives: let the pipeline run `kubectl wait` before deploying, Helm
 # pre-install/pre-upgrade hooks, Argo CD PreSync hooks / sync waves - or have
@@ -70,8 +78,19 @@ spec:
     spec:
       serviceAccountName: shop
       initContainers:
-        - name: wait-for-seed
+        - name: wait-for-seed-created
           # Distroless image: no shell, the entrypoint is kubectl itself.
+          image: rancher/kubectl:v1.36.2
+          args:
+            - wait
+            - --namespace=lab-jobs
+            - --for=create
+            - job/seed-redis
+            - --timeout=600s
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits:   { cpu: 100m, memory: 64Mi }
+        - name: wait-for-seed
           image: rancher/kubectl:v1.36.2
           args:
             - wait
