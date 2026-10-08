@@ -1,0 +1,20 @@
+# JSON 6902 patch: a list of precise operations (add/remove/replace/move/copy/
+# test) on JSON-pointer paths. More verbose than a strategic merge, but it can
+# do things a merge can't: remove a field, replace a whole list, change list
+# item N, or fail loudly via "test" if the object isn't what you expect.
+#
+# Which object it applies to is set by "target" in kustomization.yaml - the
+# patch itself has no apiVersion/kind/metadata.
+- op: add
+  path: /spec/strategy
+  value:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0        # never drop below 3 ready pods during a rollout
+- op: add
+  path: /spec/minReadySeconds
+  value: 5
+- op: replace
+  path: /spec/template/spec/containers/0/readinessProbe/periodSeconds
+  value: 3

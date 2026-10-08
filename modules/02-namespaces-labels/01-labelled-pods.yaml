@@ -1,0 +1,111 @@
+# 01 - Six small pods with different labels, to practise selectors on.
+#
+#   app    web | api                    what it is
+#   env    dev | qa | prod              where it belongs
+#   tier   frontend | backend
+#   track  stable | canary              only on the prod pods
+#
+#   kubectl apply -f modules/02-namespaces-labels/01-labelled-pods.yaml
+#   kubectl get pods -n lab-namespaces --show-labels
+#   kubectl get pods -n lab-namespaces -L env,tier,track
+#   kubectl get pods -n lab-namespaces -l 'env in (dev,qa)'
+#
+# Labels = identifying key/values you SELECT on (short, restricted charset).
+# Annotations = non-identifying metadata for humans and tools (any text,
+# can be large, cannot be selected on).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-dev
+  namespace: lab-namespaces
+  labels: { app: web, env: dev, tier: frontend }
+  annotations:
+    training/description: "Web frontend, dev environment"
+    training/owner: "team-web@example.com"
+spec:
+  containers:
+    - name: app
+      image: busybox:1.37
+      command: ["sh", "-c", "trap 'exit 0' TERM; sleep infinity & wait"]
+      resources:
+        requests: { cpu: 5m, memory: 8Mi }
+        limits: { cpu: 20m, memory: 16Mi }
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-qa
+  namespace: lab-namespaces
+  labels: { app: web, env: qa, tier: frontend }
+spec:
+  containers:
+    - name: app
+      image: busybox:1.37
+      command: ["sh", "-c", "trap 'exit 0' TERM; sleep infinity & wait"]
+      resources:
+        requests: { cpu: 5m, memory: 8Mi }
+        limits: { cpu: 20m, memory: 16Mi }
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-prod
+  namespace: lab-namespaces
+  labels: { app: web, env: prod, tier: frontend, track: stable }
+  annotations:
+    # Annotations can hold things labels can't: URLs, JSON, long text.
+    training/runbook: "https://wiki.example.com/runbooks/web"
+    training/git-commit: "3f9c2a1d4e5b6f708192a3b4c5d6e7f8091a2b3c"
+spec:
+  containers:
+    - name: app
+      image: busybox:1.37
+      command: ["sh", "-c", "trap 'exit 0' TERM; sleep infinity & wait"]
+      resources:
+        requests: { cpu: 5m, memory: 8Mi }
+        limits: { cpu: 20m, memory: 16Mi }
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-prod-canary
+  namespace: lab-namespaces
+  labels: { app: web, env: prod, tier: frontend, track: canary }
+spec:
+  containers:
+    - name: app
+      image: busybox:1.37
+      command: ["sh", "-c", "trap 'exit 0' TERM; sleep infinity & wait"]
+      resources:
+        requests: { cpu: 5m, memory: 8Mi }
+        limits: { cpu: 20m, memory: 16Mi }
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-dev
+  namespace: lab-namespaces
+  labels: { app: api, env: dev, tier: backend }
+spec:
+  containers:
+    - name: app
+      image: busybox:1.37
+      command: ["sh", "-c", "trap 'exit 0' TERM; sleep infinity & wait"]
+      resources:
+        requests: { cpu: 5m, memory: 8Mi }
+        limits: { cpu: 20m, memory: 16Mi }
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-prod
+  namespace: lab-namespaces
+  labels: { app: api, env: prod, tier: backend, track: stable }
+spec:
+  containers:
+    - name: app
+      image: busybox:1.37
+      command: ["sh", "-c", "trap 'exit 0' TERM; sleep infinity & wait"]
+      resources:
+        requests: { cpu: 5m, memory: 8Mi }
+        limits: { cpu: 20m, memory: 16Mi }

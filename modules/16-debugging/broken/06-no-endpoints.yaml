@@ -1,0 +1,86 @@
+# Broken app 06 - "orders-api" and its client
+#
+#   kubectl apply -f modules/16-debugging/broken/06-no-endpoints.yaml
+#
+# Ticket: "orders-client can't reach orders-api. Both pods are Running and
+# Ready, orders-api answers fine when I port-forward to the pod."
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orders-api
+  namespace: lab-debugging
+  labels:
+    app: orders-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: orders-api
+  template:
+    metadata:
+      labels:
+        app: orders-api
+        tier: backend
+    spec:
+      containers:
+        - name: api
+          image: hashicorp/http-echo:1.0
+          args: ["-listen=:5678", "-text=orders-api: 3 open orders"]
+          ports:
+            - name: http
+              containerPort: 5678
+          readinessProbe:
+            tcpSocket: { port: http }
+            periodSeconds: 5
+          resources:
+            requests: { cpu: 5m, memory: 8Mi }
+            limits:   { cpu: 50m, memory: 32Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: orders-api
+  namespace: lab-debugging
+  labels:
+    app: orders-api
+spec:
+  selector:
+    app: order-api
+    tier: backend
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+# The client calls the API every 5 seconds and logs the result.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orders-client
+  namespace: lab-debugging
+  labels:
+    app: orders-client
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: orders-client
+  template:
+    metadata:
+      labels:
+        app: orders-client
+    spec:
+      containers:
+        - name: client
+          image: curlimages/curl:8.11.1
+          command:
+            - sh
+            - -c
+            - |
+              while true; do
+                echo "$(date -Iseconds) $(curl -sS --max-time 3 http://orders-api 2>&1)"
+                sleep 5
+              done
+          resources:
+            requests: { cpu: 5m, memory: 8Mi }
+            limits:   { cpu: 50m, memory: 32Mi }

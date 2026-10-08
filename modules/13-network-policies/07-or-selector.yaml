@@ -1,0 +1,35 @@
+# 07 - THE GOTCHA: the same two selectors as TWO "from" elements.
+#
+#   from:
+#     - namespaceSelector: {...}     <- item 1
+#     - podSelector: {...}           <- item 2   = EITHER may match (OR)
+#
+# Allows: ANY pod in lab-netpol-other (item 1), OR any app=frontend pod in
+# the policy's own namespace lab-netpol (item 2 - a podSelector on its own
+# never reaches into other namespaces).
+# So lab-netpol-other/intruder now gets in - probably not what the author
+# wanted. One extra "-" turned AND into OR.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend-allow-other-frontend-or
+  namespace: lab-netpol
+  labels:
+    app: backend
+spec:
+  podSelector:
+    matchLabels:
+      app: backend
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: lab-netpol-other
+        - podSelector:                    # "-" here: new element -> OR
+            matchLabels:
+              app: frontend
+      ports:
+        - protocol: TCP
+          port: 80

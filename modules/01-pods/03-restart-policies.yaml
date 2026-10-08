@@ -1,0 +1,91 @@
+# 03 - restartPolicy and pod phases.
+#
+# restartPolicy is a POD-level setting that tells the kubelet what to do when
+# a container exits. It never moves the pod to another node - restarts happen
+# in place, in the same pod (same name, same IP, same volumes).
+#
+#   Always    (default) restart no matter the exit code  -> pod never "finishes"
+#   OnFailure restart only on a non-zero exit code       -> pod can end Succeeded
+#   Never     never restart                              -> pod ends Succeeded or Failed
+#
+# Restarts back off exponentially (10s, 20s, 40s ... capped at 5 minutes);
+# while the kubelet waits, the container shows CrashLoopBackOff.
+#
+#   kubectl apply -f modules/01-pods/03-restart-policies.yaml
+#   kubectl get pods -n lab-pods -l app=restart-demo -w
+#
+# Deployments only allow Always; Jobs only allow OnFailure or Never (module 08).
+# The three pods are in one file because they only make sense side by side.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: rp-always
+  namespace: lab-pods
+  labels:
+    app: restart-demo
+spec:
+  restartPolicy: Always
+  containers:
+    - name: app
+      image: busybox:1.37
+      # Exits SUCCESSFULLY after 5 seconds - and is restarted anyway,
+      # because "Always" means always. Ends up in CrashLoopBackOff.
+      command: ["sh", "-c", "echo started; sleep 5; echo done, exiting 0; exit 0"]
+      resources:
+        requests: { cpu: 5m, memory: 8Mi }
+        limits: { cpu: 50m, memory: 16Mi }
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: rp-onfailure
+  namespace: lab-pods
+  labels:
+    app: restart-demo
+spec:
+  restartPolicy: OnFailure
+  containers:
+    - name: app
+      image: busybox:1.37
+      # First run: no marker file yet -> create it and fail (exit 1).
+      # The kubelet restarts the container (OnFailure). Second run: the marker
+      # is there -> exit 0, and the pod phase becomes Succeeded.
+      # The marker survives the restart because an emptyDir belongs to the POD,
+      # not to the container. It is only deleted when the pod is deleted.
+      command:
+        - sh
+        - -c
+        - |
+          if [ -f /state/tried-once ]; then
+            echo "second attempt: succeeding"; exit 0
+          fi
+          touch /state/tried-once
+          echo "first attempt: failing with exit code 1"; exit 1
+      volumeMounts:
+        - name: state
+          mountPath: /state
+      resources:
+        requests: { cpu: 5m, memory: 8Mi }
+        limits: { cpu: 50m, memory: 16Mi }
+  volumes:
+    - name: state
+      emptyDir: {}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: rp-never
+  namespace: lab-pods
+  labels:
+    app: restart-demo
+spec:
+  restartPolicy: Never
+  containers:
+    - name: app
+      image: busybox:1.37
+      # Fails once; never restarted. Pod phase: Failed. Its logs stay
+      # readable until you delete the pod.
+      command: ["sh", "-c", "echo 'something went wrong' >&2; exit 3"]
+      resources:
+        requests: { cpu: 5m, memory: 8Mi }
+        limits: { cpu: 50m, memory: 16Mi }

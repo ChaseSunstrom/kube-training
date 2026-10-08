@@ -1,0 +1,55 @@
+# 04 - Pod affinity: co-locate a cache with the app that uses it.
+#
+# Classic pattern (also in the Kubernetes docs): every web pod gets a cache
+# pod on the SAME node, so web -> cache traffic never leaves the node.
+#
+#   podAffinity      (required): only nodes that already run an app=web pod
+#   podAntiAffinity  (required): ... and that don't already run a cache pod
+#
+# Result with the 2 web pods from 03: exactly one cache next to each web pod.
+#
+# Apply 03 first! If no app=web pod exists anywhere, the cache pods stay
+# Pending: required pod affinity can only be satisfied by pods that exist.
+# (The one exception - a pod that is affine to ITSELF - is in 05.)
+#
+# What to look at:
+#   kubectl -n lab-scheduling get pods -l 'app in (web,cache)' -o wide
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cache
+  namespace: lab-scheduling
+  labels:
+    app: cache
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cache
+  template:
+    metadata:
+      labels:
+        app: cache
+    spec:
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: web
+              topologyKey: kubernetes.io/hostname   # same NODE as a web pod
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: cache
+              topologyKey: kubernetes.io/hostname   # at most one cache per node
+      containers:
+        - name: redis
+          image: redis:7.4-alpine
+          args: ["--save", "", "--appendonly", "no"]  # pure in-memory cache, no disk
+          ports:
+            - containerPort: 6379
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 100m, memory: 64Mi}

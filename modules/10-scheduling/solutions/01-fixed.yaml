@@ -1,0 +1,37 @@
+# Solution to exercise 1.
+#
+# The event said "2 node(s) didn't match Pod's node affinity/selector":
+# nodeSelector AND node affinity must BOTH be satisfied. zone-a (nodeSelector)
+# and zone-b (affinity) can never be true for the same node. Keep one source
+# of truth - here the affinity - and drop the contradicting nodeSelector.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: broken
+  namespace: lab-scheduling
+  labels:
+    app: broken
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: broken
+  template:
+    metadata:
+      labels:
+        app: broken
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: training/zone
+                    operator: In
+                    values: ["zone-b"]
+      containers:
+        - name: app
+          image: traefik/whoami:v1.10
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 50m, memory: 32Mi}

@@ -1,0 +1,38 @@
+# 03 - Names are unique per namespace, not per cluster.
+#
+# Two pods, both called `app`, in two namespaces. This is how several teams
+# (or dev/qa/prod copies of one app) share a cluster without colliding.
+#
+#   kubectl apply -f modules/02-namespaces-labels/03-same-name-pods.yaml
+#   kubectl get pods -A -l app=same-name
+#   kubectl get pod app -n lab-namespaces-team-a
+#   kubectl get pod app                 # -> NotFound: you are looking in `default`
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app
+  namespace: lab-namespaces-team-a
+  labels: { app: same-name, team: a }
+spec:
+  containers:
+    - name: app
+      image: busybox:1.37
+      command: ["sh", "-c", "trap 'exit 0' TERM; sleep infinity & wait"]
+      resources:
+        requests: { cpu: 5m, memory: 8Mi }
+        limits: { cpu: 20m, memory: 16Mi }
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app
+  namespace: lab-namespaces-team-b
+  labels: { app: same-name, team: b }
+spec:
+  containers:
+    - name: app
+      image: busybox:1.37
+      command: ["sh", "-c", "trap 'exit 0' TERM; sleep infinity & wait"]
+      resources:
+        requests: { cpu: 5m, memory: 8Mi }
+        limits: { cpu: 20m, memory: 16Mi }

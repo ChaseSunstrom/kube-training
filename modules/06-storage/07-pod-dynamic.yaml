@@ -1,0 +1,48 @@
+# 07 - The first consumer of the "data" claim.
+#
+# Creating this pod is what makes the PVC from 06 bind:
+#   1. the scheduler picks a node for the pod (taking the claim into account),
+#   2. it records the choice on the PVC (annotation volume.kubernetes.io/selected-node),
+#   3. local-path creates a directory on that node and a PV with nodeAffinity
+#      to that node,
+#   4. the PVC binds, the kubelet mounts the volume, the container starts.
+#
+# Every start appends one line, so you can prove the data outlives the pod:
+# delete the pod, apply this file again, and the old lines are still there.
+# POD_UID changes each time - it really is a new pod.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: writer
+  namespace: lab-storage
+  labels:
+    app: writer
+spec:
+  containers:
+    - name: app
+      image: busybox:1.37
+      env:
+        - name: POD_UID
+          valueFrom:
+            fieldRef: { fieldPath: metadata.uid }
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef: { fieldPath: spec.nodeName }
+      command:
+        - sh
+        - -c
+        - |
+          trap 'exit 0' TERM
+          echo "$(date +%T) pod-uid=$POD_UID node=$NODE_NAME" >> /data/log.txt
+          cat /data/log.txt
+          sleep 3600 & wait $!
+      volumeMounts:
+        - name: data
+          mountPath: /data
+      resources:
+        requests: { cpu: 10m, memory: 16Mi }
+        limits:   { cpu: 50m, memory: 32Mi }
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: data

@@ -1,0 +1,58 @@
+# Exercise solution - "double trouble" (checkout).
+# Bug 1 (secret name) stops the container from being created at all; once
+# that is fixed, bug 2 (liveness probe path) makes the kubelet restart a
+# perfectly healthy nginx over and over.
+#
+#   kubectl apply -f modules/16-debugging/solutions/ex-double-trouble.yaml
+#
+# Goal: `kubectl -n lab-debugging get pods -l app=checkout` shows 1/1 Running
+# with RESTARTS staying at 0 for at least two minutes.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: checkout-secret
+  namespace: lab-debugging
+  labels:
+    app: checkout
+type: Opaque
+stringData:
+  api-key: demo-key-123
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: checkout
+  namespace: lab-debugging
+  labels:
+    app: checkout
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: checkout
+  template:
+    metadata:
+      labels:
+        app: checkout
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          env:
+            - name: API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: checkout-secret     # FIX 1: was "checkout-secrets" -> CreateContainerConfigError
+                  key: api-key
+          ports:
+            - name: http
+              containerPort: 80
+          livenessProbe:
+            httpGet:
+              path: /                   # FIX 2: stock nginx has no /healthz (404) -> liveness kills it every ~10s
+              port: http
+            periodSeconds: 5
+            failureThreshold: 2
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 100m, memory: 64Mi }

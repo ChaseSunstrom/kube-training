@@ -1,0 +1,37 @@
+# 01 - The "before" picture: a pod with NO securityContext at all.
+#
+#   kubectl apply -f modules/15-security/01-pod-root.yaml
+#   kubectl -n lab-security exec as-root -- id
+#   kubectl -n lab-security exec as-root -- grep -E '^(CapEff|NoNewPrivs|Seccomp):' /proc/1/status
+#
+# What you get by default (and why it is not great):
+#   * uid=0 (root)    - the image decides the user, and most images pick root.
+#                       Root in a container is the same uid 0 as root on the
+#                       node; only namespaces/cgroups/capabilities stand between
+#                       them. A container breakout as root is game over.
+#   * ~14 capabilities - the runtime's default set (CHOWN, DAC_OVERRIDE,
+#                       SETUID, NET_RAW, ...).
+#   * Seccomp: 0      - NO syscall filter. The kubelet runs pods "Unconfined"
+#                       unless you ask for RuntimeDefault (or the cluster admin
+#                       turned on the kubelet's seccompDefault setting).
+#   * NoNewPrivs: 0   - setuid binaries could raise privileges.
+#   * writable root filesystem - an attacker can drop tools into /usr/bin.
+#   * a ServiceAccount token mounted at /var/run/secrets/kubernetes.io/...
+#
+# lab-security enforces "baseline", which still allows all of this, but it
+# WARNS about "restricted" - read the warning kubectl prints when you apply.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: as-root
+  namespace: lab-security
+  labels:
+    app: as-root
+spec:
+  containers:
+    - name: app
+      image: busybox:1.37
+      command: ["sh", "-c", "sleep 86400"]
+      resources:
+        requests: { cpu: 10m, memory: 16Mi }
+        limits:   { cpu: 50m, memory: 32Mi }

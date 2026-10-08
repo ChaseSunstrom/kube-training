@@ -1,0 +1,32 @@
+# Broken app 01 - "shop-frontend"
+#
+#   kubectl apply -f modules/16-debugging/broken/01-image-pull.yaml
+#
+# Ticket: "The new shop frontend never comes up. It worked on my machine."
+# Don't read the YAML for the answer - use kubectl to find it (README).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shop-frontend
+  namespace: lab-debugging
+  labels:
+    app: shop-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: shop-frontend
+  template:
+    metadata:
+      labels:
+        app: shop-frontend
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpnie
+          ports:
+            - name: http
+              containerPort: 80
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 100m, memory: 64Mi }

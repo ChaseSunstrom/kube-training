@@ -1,0 +1,37 @@
+# 05 - A pod that uses the statically provisioned claim.
+#
+# The pod refers to the CLAIM, never to the PV directly. That indirection is
+# the point of PV/PVC: the app says "I need storage", the cluster decides
+# where it comes from.
+#
+# Watch where it lands: the PV's nodeAffinity forces the zone-a node
+# (kube-training-worker).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: static-user
+  namespace: lab-storage
+  labels:
+    app: static-demo
+spec:
+  containers:
+    - name: app
+      image: busybox:1.37
+      command:
+        - sh
+        - -c
+        - |
+          trap 'exit 0' TERM
+          echo "written at $(date) by $(hostname)" >> /data/hello.txt
+          cat /data/hello.txt
+          sleep 3600 & wait $!
+      volumeMounts:
+        - name: data
+          mountPath: /data
+      resources:
+        requests: { cpu: 10m, memory: 16Mi }
+        limits:   { cpu: 50m, memory: 32Mi }
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: static-claim

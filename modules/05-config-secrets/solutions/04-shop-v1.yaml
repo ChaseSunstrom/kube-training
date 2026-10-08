@@ -1,0 +1,37 @@
+# Solution to exercise 4, step 1 - a Deployment that reads the immutable
+# feature-flags-v1 ConfigMap from 07-immutable.yaml.
+#
+#   kubectl apply -f 07-immutable.yaml -f solutions/04-shop-v1.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shop
+  namespace: lab-config
+  labels:
+    app: shop
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: shop
+  template:
+    metadata:
+      labels:
+        app: shop
+    spec:
+      containers:
+        - name: shop
+          image: busybox:1.37
+          command:
+            - sh
+            - -c
+            - |
+              trap 'exit 0' TERM
+              echo "NEW_CHECKOUT=$NEW_CHECKOUT BETA_BANNER=$BETA_BANNER"
+              sleep 3600 & wait $!
+          envFrom:
+            - configMapRef:
+                name: feature-flags-v1
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 50m, memory: 32Mi }

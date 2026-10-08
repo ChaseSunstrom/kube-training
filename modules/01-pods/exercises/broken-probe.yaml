@@ -1,0 +1,31 @@
+# Exercise 2 - this pod starts, but never becomes Ready. Why?
+#
+#   kubectl apply -f modules/01-pods/exercises/broken-probe.yaml
+#   kubectl get pod broken-probe -n lab-pods          # READY 0/1, forever
+#
+# Find the cause using only `kubectl describe` / `kubectl get -o yaml`,
+# then fix THIS file and re-apply it. (Most probe fields cannot be changed on
+# a running pod: delete it first, or use `kubectl replace --force -f`.)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: broken-probe
+  namespace: lab-pods
+  labels:
+    app: broken-probe
+spec:
+  containers:
+    - name: echo
+      image: hashicorp/http-echo:1.0
+      args: ["-listen=:5678", "-text=ready?"]
+      ports:
+        - name: http
+          containerPort: 5678
+      readinessProbe:
+        httpGet:
+          path: /
+          port: 8080
+        periodSeconds: 3
+      resources:
+        requests: { cpu: 5m, memory: 8Mi }
+        limits: { cpu: 50m, memory: 16Mi }

@@ -1,0 +1,21 @@
+# Solution to exercise 5: give a HUMAN user read access to lab-rbac.
+#
+# Kubernetes has no User objects. "jane" exists only as the CN of a client
+# certificate signed by the cluster CA (or as a claim in an OIDC token). RBAC
+# just matches the name string - you can bind a user that has never logged in.
+# The certificate's O= fields become groups (here: training-devs).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: jane-views-lab-rbac
+  namespace: lab-rbac
+  labels:
+    app: lab-rbac
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+  - kind: User                         # User/Group subjects: apiGroup, no namespace
+    apiGroup: rbac.authorization.k8s.io
+    name: jane

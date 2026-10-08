@@ -1,0 +1,39 @@
+# 07 - A ReplicaSet that wants more pods than the quota allows.
+#
+# team-a's quota allows 4 pods. Two already exist (`app` from 03 and
+# `defaults-demo` from 06), so only 2 of these 5 replicas can be created.
+#
+# Note WHERE the error shows up: the ReplicaSet itself is accepted - it is
+# the ReplicaSet CONTROLLER whose pod creations are refused. `kubectl apply`
+# prints "created" and looks fine; the failures only appear as events on the
+# ReplicaSet (and DESIRED 5 / CURRENT 2). The same happens with Deployments,
+# StatefulSets and Jobs, so always check events when pods "don't appear".
+#
+#   kubectl apply -f modules/02-namespaces-labels/07-quota-filler.yaml
+#   kubectl get rs filler -n lab-namespaces-team-a
+#   kubectl get events -n lab-namespaces-team-a --field-selector reason=FailedCreate
+#   kubectl describe resourcequota team-a-quota -n lab-namespaces-team-a
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: filler
+  namespace: lab-namespaces-team-a
+  labels:
+    app: filler
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: filler
+  template:
+    metadata:
+      labels:
+        app: filler
+    spec:
+      containers:
+        - name: app
+          image: busybox:1.37
+          command: ["sh", "-c", "trap 'exit 0' TERM; sleep infinity & wait"]
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 50m, memory: 32Mi }

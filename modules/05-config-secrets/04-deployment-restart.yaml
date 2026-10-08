@@ -1,0 +1,69 @@
+# 04 - Getting config changes into running pods.
+#
+# The greeter Deployment reads GREETING from a ConfigMap as an env var and
+# logs it every 5 seconds. Because env vars are fixed at container start,
+# editing the ConfigMap changes NOTHING in the running pods. Two fixes:
+#
+#   a) kubectl rollout restart deployment/greeter
+#      Adds a kubectl.kubernetes.io/restartedAt annotation to the pod
+#      template -> new ReplicaSet -> new pods read the new value.
+#
+#   b) The "checksum annotation" pattern (used by Helm charts everywhere):
+#      put a hash of the config into a pod-template annotation. When the
+#      config changes, the hash changes, the template changes, and a rolling
+#      update happens automatically on the next apply. Helm:
+#        checksum/config: {{ include (print $.Template.BasePath "/cm.yaml") . | sha256sum }}
+#      Kustomize gets the same effect with configMapGenerator, which appends
+#      a content hash to the ConfigMap NAME (see modules/17-kustomize).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: greeter-config
+  namespace: lab-config
+  labels:
+    app: greeter
+data:
+  GREETING: "Hello, v1"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: greeter
+  namespace: lab-config
+  labels:
+    app: greeter
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: greeter
+  template:
+    metadata:
+      labels:
+        app: greeter
+      annotations:
+        # Pattern (b). In real life a tool computes this; in the lab you will
+        # patch it by hand with the sha256 of the ConfigMap data.
+        checksum/config: "initial"
+    spec:
+      containers:
+        - name: greeter
+          image: busybox:1.37
+          # "trap ... TERM" + "sleep & wait": a shell running as PID 1 ignores
+          # SIGTERM unless it installs a handler, so without this every pod
+          # would take the full 30s grace period to stop during a rollout.
+          command:
+            - sh
+            - -c
+            - |
+              trap 'exit 0' TERM
+              while true; do
+                echo "$(date +%T) $(hostname) says: $GREETING"
+                sleep 5 & wait $!
+              done
+          envFrom:
+            - configMapRef:
+                name: greeter-config
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 50m, memory: 32Mi }

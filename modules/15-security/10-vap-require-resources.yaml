@@ -1,0 +1,57 @@
+# 10 - A second ValidatingAdmissionPolicy: every container must declare a
+#      CPU request, a memory request and a memory limit.
+#
+#   kubectl apply -f modules/15-security/10-vap-require-resources.yaml
+#   kubectl apply -f modules/15-security/vap/03-no-limits-pod.yaml   # denied
+#
+# Why exactly these three?
+#   requests.cpu / requests.memory  - the scheduler needs them to place the pod
+#                                     sensibly, and they decide its QoS class.
+#   limits.memory                   - without it, one leaking container can eat
+#                                     the node's memory and trigger node-level
+#                                     OOM kills of OTHER pods.
+#   limits.cpu is deliberately NOT required: CPU is compressible (an overrun
+#   only means throttling), and CPU limits often cause latency spikes. Many
+#   teams leave it unset. Policies should encode decisions like this explicitly.
+#
+# Pods only (no Deployments) to keep the CEL short; see the exercise in the
+# README for extending it.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: lab-security-require-resources
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE"]       # pod resources are (mostly) immutable anyway
+        resources: ["pods"]
+  validations:
+    - expression: >-
+        object.spec.containers.all(c,
+          has(c.resources) &&
+          has(c.resources.requests) && 'cpu' in c.resources.requests && 'memory' in c.resources.requests &&
+          has(c.resources.limits) && 'memory' in c.resources.limits
+        )
+      messageExpression: >-
+        'every container needs resources.requests.cpu, resources.requests.memory and resources.limits.memory; missing in: '
+        + object.spec.containers.filter(c,
+            !(has(c.resources) &&
+              has(c.resources.requests) && 'cpu' in c.resources.requests && 'memory' in c.resources.requests &&
+              has(c.resources.limits) && 'memory' in c.resources.limits)
+          ).map(c, c.name).join(', ')
+      reason: Invalid
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: lab-security-require-resources
+spec:
+  policyName: lab-security-require-resources
+  validationActions: ["Deny"]
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: lab-security

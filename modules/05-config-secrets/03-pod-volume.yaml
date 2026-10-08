@@ -1,0 +1,66 @@
+# 03 - Consuming a ConfigMap as FILES (volume mounts).
+#
+# This pod mounts the same ConfigMap three different ways so you can compare
+# how each one behaves when the ConfigMap changes:
+#
+#   /etc/app/                      whole ConfigMap: one file per key
+#   /etc/app-one/application.properties
+#                                  only ONE key (items:), renamed on disk
+#   /etc/subpath/app.properties    one key via subPath, placed next to other
+#                                  files without hiding the directory
+#
+# Live updates: the kubelet refreshes ConfigMap volumes periodically (by
+# default within roughly a minute: kubelet sync period + its cache TTL).
+#   - /etc/app and /etc/app-one   -> UPDATED in place (atomic symlink swap)
+#   - /etc/subpath/app.properties -> NEVER updated (subPath is a bind mount
+#                                    of the file that existed at start-up)
+#   - env var COLOR               -> NEVER updated (env is fixed at start)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: volume-demo
+  namespace: lab-config
+  labels:
+    app: volume-demo
+spec:
+  containers:
+    - name: app
+      image: busybox:1.37
+      command: ["sh", "-c", "sleep 3600"]
+      env:
+        - name: COLOR
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: APP_COLOR
+      volumeMounts:
+        # Whole ConfigMap as a directory. Anything that was in /etc/app in the
+        # image is hidden by this mount.
+        - name: config-all
+          mountPath: /etc/app
+          readOnly: true
+        # Only the keys listed under items:, at the paths you choose.
+        - name: config-one
+          mountPath: /etc/app-one
+          readOnly: true
+        # subPath: mount a single file from the volume at an exact path.
+        # Useful to drop one file into a directory that already has other
+        # files (e.g. /etc/nginx/conf.d/), BUT it does not receive updates.
+        - name: config-all
+          mountPath: /etc/subpath/app.properties
+          subPath: app.properties
+          readOnly: true
+      resources:
+        requests: { cpu: 10m, memory: 16Mi }
+        limits:   { cpu: 50m, memory: 32Mi }
+  volumes:
+    - name: config-all
+      configMap:
+        name: app-config
+    - name: config-one
+      configMap:
+        name: app-config
+        items:
+          - key: app.properties
+            path: application.properties   # file name on disk
+            mode: 0444                     # per-file permission bits

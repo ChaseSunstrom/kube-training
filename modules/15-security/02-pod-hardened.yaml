@@ -1,0 +1,84 @@
+# 02 - The "after" picture: the same busybox, hardened.
+#
+#   kubectl apply -f modules/15-security/02-pod-hardened.yaml     # no PSA warning this time!
+#   kubectl -n lab-security exec hardened -c app -- id
+#   kubectl -n lab-security exec hardened -c override -- id
+#   kubectl -n lab-security exec hardened -c app -- grep -E '^(CapEff|CapBnd|NoNewPrivs|Seccomp):' /proc/1/status
+#   kubectl -n lab-security exec hardened -c app -- touch /evil            # Read-only file system
+#   kubectl -n lab-security exec hardened -c app -- touch /tmp/ok /data/ok # emptyDirs are writable
+#   kubectl -n lab-security exec hardened -c app -- ls -ln /data           # group 2000 = fsGroup
+#
+# securityContext exists at TWO levels:
+#   spec.securityContext                 (PodSecurityContext) - defaults for every
+#                                        container + pod-wide things (fsGroup,
+#                                        supplementalGroups, sysctls)
+#   spec.containers[].securityContext    (SecurityContext) - per container; a field
+#                                        set here OVERRIDES the pod-level value.
+# Some fields exist only at one level: fsGroup is pod-only; capabilities,
+# readOnlyRootFilesystem, allowPrivilegeEscalation and privileged are
+# container-only. runAsUser/runAsGroup/runAsNonRoot/seccompProfile exist at both.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: hardened
+  namespace: lab-security
+  labels:
+    app: hardened
+spec:
+  securityContext:
+    runAsNonRoot: true          # kubelet refuses to start a container whose effective
+                                # uid is 0 (it checks the image's USER if runAsUser is unset;
+                                # a non-numeric USER like "nginx" cannot be verified -> error)
+    runAsUser: 1000             # uid of the container's main process
+    runAsGroup: 3000            # primary gid (otherwise gid 0 - a classic oversight)
+    fsGroup: 2000               # supplementary gid added to every process; volumes that
+                                # support ownership management (emptyDir, most block/CSI
+                                # volumes, Secrets/ConfigMaps) are chgrp'ed to 2000 and made
+                                # group-writable (setgid dir, so new files inherit gid 2000)
+    fsGroupChangePolicy: OnRootMismatch  # only walk/chown the volume if its root dir is
+                                         # wrong - avoids slow startups on huge volumes
+    seccompProfile:
+      type: RuntimeDefault      # containerd's default syscall filter (blocks ~40-60
+                                # dangerous syscalls like kexec_load, add_key, bpf, ...)
+  volumes:
+    - name: tmp
+      emptyDir:
+        sizeLimit: 16Mi         # a writable /tmp, because the root filesystem is read-only
+    - name: data
+      emptyDir: {}
+  containers:
+    - name: app
+      image: busybox:1.37
+      command: ["sh", "-c", "sleep 86400"]
+      securityContext:
+        allowPrivilegeEscalation: false   # sets the no_new_privs flag: setuid/setgid
+                                          # binaries and file capabilities can't elevate
+        readOnlyRootFilesystem: true      # image filesystem is immutable at runtime
+        capabilities:
+          drop: ["ALL"]                   # start from zero ...
+          add: ["NET_BIND_SERVICE"]       # ... and add back only what you need.
+          # NOTE: for a NON-root process "add" only puts the capability in the
+          # bounding set; it is NOT effective (CapEff stays 0) because Kubernetes
+          # has no "ambient" capabilities. It only helps root processes or
+          # binaries with file capabilities (setcap). See README step 3.
+      volumeMounts:
+        - { name: tmp,  mountPath: /tmp }
+        - { name: data, mountPath: /data }
+      resources:
+        requests: { cpu: 10m, memory: 16Mi }
+        limits:   { cpu: 50m, memory: 32Mi }
+
+    - name: override
+      image: busybox:1.37
+      command: ["sh", "-c", "sleep 86400"]
+      securityContext:
+        runAsUser: 1001                   # container-level wins over pod-level runAsUser
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: ["ALL"]
+      volumeMounts:
+        - { name: data, mountPath: /data }
+      resources:
+        requests: { cpu: 10m, memory: 16Mi }
+        limits:   { cpu: 50m, memory: 32Mi }

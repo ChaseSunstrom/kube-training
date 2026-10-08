@@ -1,0 +1,33 @@
+# 06 - A pod that can never be scheduled (on purpose), to practise reading
+# the scheduler's FailedScheduling events.
+#
+# It requires to run next to an app=database pod. No such pod exists, and the
+# pod's OWN labels (app=waits-for-db) don't match the term, so the
+# "first pod of a self-affine group" exception from 05 does NOT apply.
+# Result: Pending forever (the scheduler keeps retrying - create an
+# app=database pod and this one schedules within seconds).
+#
+# What to look at:
+#   kubectl -n lab-scheduling describe pod waits-for-db     (Events at the bottom)
+#   kubectl -n lab-scheduling get events --field-selector reason=FailedScheduling
+apiVersion: v1
+kind: Pod
+metadata:
+  name: waits-for-db
+  namespace: lab-scheduling
+  labels:
+    app: waits-for-db
+spec:
+  affinity:
+    podAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchLabels:
+              app: database
+          topologyKey: kubernetes.io/hostname
+  containers:
+    - name: app
+      image: traefik/whoami:v1.10
+      resources:
+        requests: {cpu: 10m, memory: 16Mi}
+        limits: {cpu: 50m, memory: 32Mi}

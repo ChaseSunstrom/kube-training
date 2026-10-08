@@ -1,0 +1,29 @@
+# 03 - A pod that talks to the API server with its ServiceAccount token.
+#
+# rancher/kubectl is distroless: no shell, the entrypoint IS kubectl, so
+# "args" are kubectl arguments. Inside a pod kubectl needs no kubeconfig: it
+# finds KUBERNETES_SERVICE_HOST/PORT in its environment and the token + CA in
+# /var/run/secrets/kubernetes.io/serviceaccount ("in-cluster config").
+#
+# It runs once (restartPolicy: Never) and lists the pods in lab-rbac.
+# Apply it BEFORE 04 and read its logs: Forbidden - the ServiceAccount exists,
+# authentication works, but nothing AUTHORIZES it to list pods.
+# Then apply 04 and run it again:
+#   kubectl replace --force -f modules/11-rbac/03-kubectl-pod.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kubectl-client
+  namespace: lab-rbac
+  labels:
+    app: kubectl-client
+spec:
+  serviceAccountName: pod-viewer
+  restartPolicy: Never
+  containers:
+    - name: kubectl
+      image: rancher/kubectl:v1.36.2
+      args: ["get", "pods", "--namespace", "lab-rbac"]
+      resources:
+        requests: {cpu: 10m, memory: 32Mi}
+        limits: {cpu: 200m, memory: 128Mi}

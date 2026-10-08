@@ -1,0 +1,70 @@
+# Solution to exercise 3 - a Deployment that owns a ReadWriteOnce volume.
+#
+# With the default RollingUpdate strategy, the NEW pod is started before the
+# OLD one is stopped. On cloud block storage the new pod may land on another
+# node, where the disk cannot be attached while the old pod still holds it:
+#   Multi-Attach error for volume "pvc-..." Volume is already used by pod(s) ...
+# The new pod never becomes Ready, so the old one is never removed: the
+# rollout is stuck. (On kind you won't see the error: the PV's node affinity
+# forces the new pod onto the same node, where RWO allows both.)
+#
+# strategy: Recreate stops ALL old pods first, then starts the new ones. You
+# accept a short downtime in exchange for never having two pods on the volume.
+# replicas must stay 1 - more replicas would all share one RWO volume.
+#
+# For ordered hand-offs and other patterns see
+# ../../../scenarios/rwo-pvc-ordered-pods/README.md
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: app-data
+  namespace: lab-storage
+  labels:
+    app: single-writer-app
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: single-writer-app
+  namespace: lab-storage
+  labels:
+    app: single-writer-app
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: single-writer-app
+  template:
+    metadata:
+      labels:
+        app: single-writer-app
+    spec:
+      containers:
+        - name: app
+          image: busybox:1.37
+          command:
+            - sh
+            - -c
+            - |
+              trap 'exit 0' TERM
+              echo "$(date +%T) started $(hostname)" >> /data/starts.log
+              cat /data/starts.log
+              sleep 3600 & wait $!
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 50m, memory: 32Mi }
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: app-data

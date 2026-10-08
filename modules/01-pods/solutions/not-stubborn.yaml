@@ -1,0 +1,27 @@
+# Exercise 5 - solution: make `stubborn` shut down quickly without changing
+# the image or the grace period.
+#
+# PID 1 must handle SIGTERM. Wrap the long-running command in a shell that
+# traps TERM, and run the command in the background + `wait` so the trap can
+# fire immediately. (Alternatives in real images: `exec` your app from the
+# entrypoint script so it becomes PID 1, or use a tiny init such as tini /
+# `docker run --init`, which forwards signals.)
+#
+#   kubectl apply -f modules/01-pods/solutions/not-stubborn.yaml
+#   time kubectl delete pod not-stubborn -n lab-pods     # a few seconds at most, instead of 10s
+apiVersion: v1
+kind: Pod
+metadata:
+  name: not-stubborn
+  namespace: lab-pods
+  labels:
+    app: termination-demo
+spec:
+  terminationGracePeriodSeconds: 10
+  containers:
+    - name: app
+      image: busybox:1.37
+      command: ["sh", "-c", "trap 'echo SIGTERM, bye; exit 0' TERM; sleep 3600 & wait"]
+      resources:
+        requests: { cpu: 5m, memory: 8Mi }
+        limits: { cpu: 50m, memory: 16Mi }

@@ -1,0 +1,16 @@
+# Namespace for module 00 (setup).
+#
+# Every module in this course owns exactly one namespace, so labs never
+# collide and cleanup is a single `kubectl delete namespace lab-setup`.
+#
+#   kubectl apply -f modules/00-setup/00-namespace.yaml
+#   kubectl get namespace lab-setup --show-labels
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-setup
+  labels:
+    # `app` is the label every object in this repo carries (see docs/CONVENTIONS.md).
+    app: setup
+    # Namespaces automatically get kubernetes.io/metadata.name=<name>;
+    # you will use that label later in NetworkPolicies (module 13).

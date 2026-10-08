@@ -1,0 +1,72 @@
+# 07 - Init containers.
+#
+# initContainers run BEFORE the app containers, one at a time, in order.
+# Each must exit 0 before the next starts; if one fails, the kubelet retries
+# it (with back-off) according to the pod's restartPolicy. App containers
+# start only when all init containers have succeeded.
+#
+# Typical uses: wait for a dependency, run a DB migration, fetch/render
+# config into a shared volume, fix file permissions - using tools you do not
+# want to ship in the app image.
+#
+#   kubectl apply -f modules/01-pods/07-init-containers.yaml
+#   kubectl get pod init-demo -n lab-pods -w                  # Init:0/2 -> Init:1/2 ... stuck
+#   kubectl logs init-demo -n lab-pods -c wait-for-db         # "waiting for init-demo-db..."
+#   kubectl apply -f modules/01-pods/08-init-dependency-service.yaml   # unblocks it
+#
+# The pod's STATUS column shows Init:N/M while init containers run, and
+# Init:CrashLoopBackOff / Init:Error if one keeps failing.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: init-demo
+  namespace: lab-pods
+  labels:
+    app: init-demo
+spec:
+  initContainers:
+    # 1. Render "config" into a shared volume. Runs once and exits.
+    - name: render-config
+      image: busybox:1.37
+      command:
+        - sh
+        - -c
+        - |
+          echo "<h1>rendered by an init container at $(date)</h1>" > /work/index.html
+          echo "config rendered"
+      volumeMounts:
+        - name: work
+          mountPath: /work
+      resources:
+        requests: { cpu: 5m, memory: 8Mi }
+        limits: { cpu: 50m, memory: 16Mi }
+    # 2. Wait until a dependency exists. Here: until the Service
+    #    init-demo-db has a DNS record (created by 08-init-dependency-service.yaml).
+    - name: wait-for-db
+      image: busybox:1.37
+      command:
+        - sh
+        - -c
+        - |
+          until nslookup init-demo-db.lab-pods.svc.cluster.local >/dev/null 2>&1; do
+            echo "waiting for init-demo-db..."
+            sleep 2
+          done
+          echo "init-demo-db resolves - done"
+      resources:
+        requests: { cpu: 5m, memory: 8Mi }
+        limits: { cpu: 50m, memory: 16Mi }
+  containers:
+    - name: web
+      image: nginx:1.27-alpine
+      ports:
+        - containerPort: 80
+      volumeMounts:
+        - name: work
+          mountPath: /usr/share/nginx/html
+      resources:
+        requests: { cpu: 10m, memory: 16Mi }
+        limits: { cpu: 100m, memory: 64Mi }
+  volumes:
+    - name: work
+      emptyDir: {}

@@ -1,0 +1,39 @@
+# 04 - nginx server config for running nginx as a NON-root user.
+#
+# The stock nginx:1.27-alpine image is built to start as root:
+#   * it listens on port 80            (privileged port on many runtimes)
+#   * it writes its pid to /run/nginx.pid and temp files under /var/cache/nginx
+#     (both root-owned, and our root filesystem will be read-only anyway)
+#   * the master process runs as root and drops to "user nginx" for workers.
+#
+# This ConfigMap replaces /etc/nginx/conf.d/default.conf so nginx listens on
+# 8080 instead of 80. The Deployment (05) supplies the writable directories.
+# (Alternative: the nginxinc/nginx-unprivileged image does all of this for you -
+# good to know about, but we stick to the course's image list.)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-nonroot
+  namespace: lab-security-restricted
+  labels:
+    app: nginx-nonroot
+data:
+  default.conf: |
+    server {
+        listen       8080;          # unprivileged port: works for any uid on any runtime
+        # (no "listen [::]:8080" - kind clusters are usually IPv4-only and nginx
+        #  exits with "Address family not supported" if the pod has no IPv6)
+        server_name  _;
+
+        location / {
+            root   /usr/share/nginx/html;
+            index  index.html;
+        }
+
+        # tiny health endpoint for the probes
+        location = /healthz {
+            access_log off;
+            default_type text/plain;
+            return 200 "ok\n";
+        }
+    }

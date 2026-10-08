@@ -1,0 +1,81 @@
+# Solution to exercise 5: two DIFFERENT workloads that must share a node,
+# without hard-coding which node.
+#
+# Both Deployments carry the label data-group=shared and BOTH require pod
+# affinity to data-group=shared on kubernetes.io/hostname. Whichever pod is
+# scheduled first matches its own term while no other matching pod exists,
+# so the "first pod of a self-affine group" rule lets it go anywhere; every
+# later pod (of either Deployment) must follow it to that node.
+#
+# This is the scheduling half of sharing a ReadWriteOnce volume between two
+# pods (RWO = mountable by pods on ONE node). For the ordering half (B starts
+# only after A) and the full working patterns see
+# ../../../scenarios/rwo-pvc-ordered-pods/README.md
+#
+# Caveat: pod affinity only looks at pods that EXIST. If you scale both to 0
+# and back up, the group may pick a different node - with a real RWO volume
+# the volume's node affinity (local-path PVs are pinned to one node) then
+# decides instead.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: writer
+  namespace: lab-scheduling
+  labels:
+    app: writer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: writer
+  template:
+    metadata:
+      labels:
+        app: writer
+        data-group: shared          # shared label = group membership
+    spec:
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  data-group: shared
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - name: app
+          image: traefik/whoami:v1.10
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 50m, memory: 32Mi}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: reader
+  namespace: lab-scheduling
+  labels:
+    app: reader
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: reader
+  template:
+    metadata:
+      labels:
+        app: reader
+        data-group: shared
+    spec:
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  data-group: shared
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - name: app
+          image: traefik/whoami:v1.10
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 50m, memory: 32Mi}

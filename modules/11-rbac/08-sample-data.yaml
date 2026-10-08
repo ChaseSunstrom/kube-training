@@ -1,0 +1,26 @@
+# 08 - Something to read (or be forbidden to read) in the can-i matrix.
+#
+#   config-reader may read the ConfigMap, not the Secret.
+#   viewer (built-in "view") may read the ConfigMap, not the Secret: "view"
+#     deliberately excludes Secrets, because reading Secrets is often enough
+#     to escalate (they can contain credentials of more powerful identities).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: lab-rbac
+  labels:
+    app: lab-rbac
+data:
+  LOG_LEVEL: info
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-secret
+  namespace: lab-rbac
+  labels:
+    app: lab-rbac
+type: Opaque
+stringData:
+  password: not-a-real-password

@@ -1,0 +1,27 @@
+# Exercise 3 - solution.
+#
+# 1st attempt (cpu 600m) is refused by the LimitRanger plugin (05-limitrange.yaml):
+#   pods "big-request" is forbidden: maximum cpu usage per Container is 500m, but limit is 600m
+# 2nd attempt, e.g. 300m: within the LimitRange, but the ResourceQuota plugin
+# (04-resourcequota.yaml) refuses it, because requests.cpu would exceed 200m:
+#   exceeded quota: team-a-quota, requested: requests.cpu=300m, used: requests.cpu=30m, limited: requests.cpu=200m
+# (used = 5m for `app` + 25m defaulted for `defaults-demo`)
+# 150m fits both: <= 500m per container, and 30m + 150m <= 200m in total.
+#
+#   kubectl apply -f modules/02-namespaces-labels/solutions/big-request.yaml
+#   kubectl describe resourcequota team-a-quota -n lab-namespaces-team-a   # requests.cpu 180m/200m
+apiVersion: v1
+kind: Pod
+metadata:
+  name: big-request
+  namespace: lab-namespaces-team-a
+  labels:
+    app: big-request
+spec:
+  containers:
+    - name: app
+      image: busybox:1.37
+      command: ["sh", "-c", "trap 'exit 0' TERM; sleep infinity & wait"]
+      resources:
+        requests: { cpu: 150m, memory: 32Mi }
+        limits: { cpu: 150m, memory: 64Mi }

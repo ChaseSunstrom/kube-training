@@ -1,0 +1,60 @@
+# Solution 05 - uploads: the PVC asked for StorageClass "fast-ssd", which
+# does not exist in this cluster, so no PV is ever provisioned, the PVC stays
+# Pending and the pod can't be scheduled ("unbound immediate
+# PersistentVolumeClaims").
+#
+# A PVC's storageClassName is immutable, so you can't just apply the fix -
+# delete the broken objects first:
+#   kubectl delete -f modules/16-debugging/broken/05-unbound-pvc.yaml
+#   kubectl apply  -f modules/16-debugging/solutions/05-unbound-pvc.yaml
+#   kubectl -n lab-debugging get pvc uploads-data      # Bound once the pod is scheduled
+#
+# (Alternative: create a StorageClass called fast-ssd. Note "standard" uses
+#  WaitForFirstConsumer, so the PVC only binds after the pod is scheduled.)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: uploads-data
+  namespace: lab-debugging
+  labels:
+    app: uploads
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: standard      # FIX: "fast-ssd" does not exist (or omit the field to use the default class)
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: uploads
+  namespace: lab-debugging
+  labels:
+    app: uploads
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate          # RWO volume: never run old and new pod at the same time
+  selector:
+    matchLabels:
+      app: uploads
+  template:
+    metadata:
+      labels:
+        app: uploads
+    spec:
+      containers:
+        - name: app
+          image: busybox:1.37
+          command: ["sh", "-c", "echo ready > /data/status; sleep 86400"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            requests: { cpu: 5m, memory: 8Mi }
+            limits:   { cpu: 20m, memory: 16Mi }
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: uploads-data

@@ -1,0 +1,8 @@
+# The dev namespace. Listed in this overlay's resources so that
+# `kubectl apply -k overlays/dev` creates it before the objects that live in it.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-kustomize-dev
+  labels:
+    app: kustomize

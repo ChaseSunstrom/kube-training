@@ -1,0 +1,87 @@
+# 07 - Taints and tolerations: a "dedicated node".
+#
+# PREREQUISITE (the README does this in the lab): taint ONE worker
+#
+#   kubectl taint nodes kube-training-worker2 lab-scheduling/dedicated=special:NoSchedule
+#
+# and REMOVE it when you're done (note the trailing "-"):
+#
+#   kubectl taint nodes kube-training-worker2 lab-scheduling/dedicated-
+#
+# A taint REPELS pods; a toleration lets a pod IGNORE a taint. Effects:
+#   NoSchedule        new pods without a matching toleration are not scheduled
+#                     there (running pods stay)
+#   PreferNoSchedule  soft version: the scheduler avoids the node if it can
+#   NoExecute         also EVICTS running pods that don't tolerate it (08)
+#
+# Two Deployments:
+#   regular   - no toleration -> all replicas avoid kube-training-worker2
+#   dedicated - tolerates the taint AND requires zone-b via node affinity
+#
+# Why both a toleration and node affinity? A toleration only PERMITS a node,
+# it never ATTRACTS a pod to it. Without the affinity the "dedicated" pods
+# could land on any worker. Taint (keeps others out) + affinity (pulls these
+# in) is the standard recipe for dedicated nodes (GPU nodes, licensed
+# software, noisy batch jobs...).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: regular
+  namespace: lab-scheduling
+  labels:
+    app: regular
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: regular
+  template:
+    metadata:
+      labels:
+        app: regular
+    spec:
+      containers:
+        - name: app
+          image: traefik/whoami:v1.10
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 50m, memory: 32Mi}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dedicated
+  namespace: lab-scheduling
+  labels:
+    app: dedicated
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: dedicated
+  template:
+    metadata:
+      labels:
+        app: dedicated
+    spec:
+      tolerations:
+        - key: lab-scheduling/dedicated
+          operator: Equal          # key, value AND effect must match the taint
+          value: special
+          effect: NoSchedule
+          # operator: Exists (no value) would tolerate any value of this key;
+          # leaving out effect tolerates every effect of this key.
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: training/zone
+                    operator: In
+                    values: ["zone-b"]
+      containers:
+        - name: app
+          image: traefik/whoami:v1.10
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 50m, memory: 32Mi}

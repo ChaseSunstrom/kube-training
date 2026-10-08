@@ -1,0 +1,80 @@
+# 03 - Linux capabilities: root is not one thing, it is ~40 separate powers.
+#
+#   kubectl apply -f modules/15-security/03-capabilities.yaml
+#   kubectl -n lab-security logs caps-default
+#   kubectl -n lab-security logs caps-dropped
+#
+# Both pods run as ROOT (uid 0) - on purpose, because capabilities only really
+# matter for root. Each pod prints its effective capability mask and tries
+#   1. chown a file to another user   (needs CAP_CHOWN)
+#   2. start a web server on port 80  (needs CAP_NET_BIND_SERVICE ... usually)
+#
+#   caps-default : runtime default capability set -> chown works
+#   caps-dropped : drop ALL, add NET_BIND_SERVICE -> chown FAILS even as root,
+#                  port 80 still works because that one capability was added back.
+#
+# Why port 80 is not a great test on modern runtimes: containerd >= 2.0 and
+# CRI-O set the sysctl net.ipv4.ip_unprivileged_port_start=0 inside each pod,
+# so ANY user may bind ports < 1024. The script prints that sysctl too.
+# Don't rely on it for portability: have non-root apps listen on >= 1024
+# (see 05-nginx-nonroot.yaml) - that works everywhere.
+#
+# These pods still run as root, so lab-security (enforce=baseline) admits
+# them with a "restricted" warning; lab-security-restricted would reject them.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: caps-default
+  namespace: lab-security
+  labels:
+    app: caps-default
+spec:
+  restartPolicy: Never
+  containers:
+    - name: app
+      image: busybox:1.37
+      command:
+        - sh
+        - -c
+        - |
+          echo "id:                $(id)"
+          echo "CapEff:            $(grep CapEff /proc/self/status | cut -f2)"
+          echo "unpriv port start: $(cat /proc/sys/net/ipv4/ip_unprivileged_port_start)"
+          touch /tmp/f
+          chown 65534 /tmp/f && echo "chown:             OK" || echo "chown:             FAILED"
+          httpd -p 80 && echo "bind port 80:      OK" || echo "bind port 80:      FAILED"
+          sleep 86400
+      resources:
+        requests: { cpu: 10m, memory: 16Mi }
+        limits:   { cpu: 50m, memory: 32Mi }
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: caps-dropped
+  namespace: lab-security
+  labels:
+    app: caps-dropped
+spec:
+  restartPolicy: Never
+  containers:
+    - name: app
+      image: busybox:1.37
+      command:
+        - sh
+        - -c
+        - |
+          echo "id:                $(id)"
+          echo "CapEff:            $(grep CapEff /proc/self/status | cut -f2)"
+          echo "unpriv port start: $(cat /proc/sys/net/ipv4/ip_unprivileged_port_start)"
+          touch /tmp/f
+          chown 65534 /tmp/f && echo "chown:             OK" || echo "chown:             FAILED"
+          httpd -p 80 && echo "bind port 80:      OK" || echo "bind port 80:      FAILED"
+          sleep 86400
+      securityContext:
+        capabilities:
+          drop: ["ALL"]
+          add: ["NET_BIND_SERVICE"]
+      resources:
+        requests: { cpu: 10m, memory: 16Mi }
+        limits:   { cpu: 50m, memory: 32Mi }

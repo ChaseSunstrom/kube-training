@@ -1,0 +1,93 @@
+# 10 - ReadWriteOnce means "one NODE", not "one pod".
+#
+# Two pods, one RWO claim. Both pods are pinned to the same node
+# (training/zone=zone-a), so both mount the volume read-write at the same
+# time and see each other's writes.
+#
+# This is legal and by design: RWO restricts how many NODES may mount the
+# volume read-write. If you need "exactly one POD", use ReadWriteOncePod
+# (12-rwop.yaml).
+#
+# Concurrent writers on a plain filesystem are YOUR problem: appending short
+# lines works; two databases on the same files corrupt each other. For the
+# real-world version of this - one RWO volume, two pods, in a specific order -
+# see ../../scenarios/rwo-pvc-ordered-pods/README.md
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: shared-rwo
+  namespace: lab-storage
+  labels:
+    app: rwo-demo
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: rwo-a
+  namespace: lab-storage
+  labels:
+    app: rwo-demo
+spec:
+  nodeSelector:
+    training/zone: zone-a
+  containers:
+    - name: app
+      image: busybox:1.37
+      command:
+        - sh
+        - -c
+        - |
+          trap 'exit 0' TERM
+          while true; do
+            echo "$(date +%T) $(hostname)" >> /data/shared.log
+            sleep 5 & wait $!
+          done
+      volumeMounts:
+        - name: data
+          mountPath: /data
+      resources:
+        requests: { cpu: 10m, memory: 16Mi }
+        limits:   { cpu: 50m, memory: 32Mi }
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: shared-rwo
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: rwo-b
+  namespace: lab-storage
+  labels:
+    app: rwo-demo
+spec:
+  nodeSelector:
+    training/zone: zone-a        # same node as rwo-a
+  containers:
+    - name: app
+      image: busybox:1.37
+      command:                   # same loop as rwo-a
+        - sh
+        - -c
+        - |
+          trap 'exit 0' TERM
+          while true; do
+            echo "$(date +%T) $(hostname)" >> /data/shared.log
+            sleep 5 & wait $!
+          done
+      volumeMounts:
+        - name: data
+          mountPath: /data
+      resources:
+        requests: { cpu: 10m, memory: 16Mi }
+        limits:   { cpu: 50m, memory: 32Mi }
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: shared-rwo

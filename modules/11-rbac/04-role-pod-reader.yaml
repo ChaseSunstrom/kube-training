@@ -1,0 +1,49 @@
+# 04 - Role + RoleBinding: read-only access to pods in ONE namespace.
+#
+# Role        = a list of rules (apiGroups x resources x verbs), namespaced.
+# RoleBinding = "these subjects get this role IN THIS NAMESPACE".
+#
+# RBAC is purely additive: there are no "deny" rules. Anything not granted by
+# some binding is forbidden.
+#
+# Verbs map to HTTP requests:
+#   get (one object)   list (collection)   watch (stream of changes)
+#   create  update (PUT)  patch  delete  deletecollection
+# kubectl get pods        -> list
+# kubectl get pod foo     -> get
+# kubectl get pods -w     -> list + watch
+#
+# apiGroups: "" is the core group (pods, services, configmaps, secrets...).
+# Deployments are in "apps", Ingresses in "networking.k8s.io", etc. Find
+# them with:  kubectl api-resources -o wide
+#
+# Subresources are separate resources in RBAC: "pods/log", "pods/exec",
+# "deployments/scale". This Role deliberately does NOT include pods/log
+# (Exercise 2 adds it).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pod-reader
+  namespace: lab-rbac
+  labels:
+    app: pod-reader
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pod-viewer-reads-pods
+  namespace: lab-rbac
+  labels:
+    app: pod-reader
+roleRef:                       # immutable: to change it, delete and recreate the binding
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: pod-reader
+subjects:
+  - kind: ServiceAccount       # ServiceAccount subjects need a namespace,
+    name: pod-viewer           # User/Group subjects use apiGroup instead
+    namespace: lab-rbac

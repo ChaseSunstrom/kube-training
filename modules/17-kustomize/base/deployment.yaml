@@ -1,0 +1,39 @@
+# The app: traefik/whoami, configured from the generated ConfigMap.
+# Overlays change replicas, image, resources and config - not this file.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  labels:
+    app: web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+        - name: whoami
+          image: traefik/whoami:v1.10
+          envFrom:
+            - configMapRef:
+                name: app-config        # kustomize rewrites this to app-config-<hash>
+          env:
+            - name: API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret      # ... and this to app-secret-<hash>
+                  key: API_TOKEN
+          ports:
+            - name: http
+              containerPort: 80
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 5
+          resources:
+            requests: { cpu: 5m, memory: 8Mi }
+            limits:   { cpu: 50m, memory: 32Mi }

@@ -1,0 +1,25 @@
+# Exercise 5 - solution: an object-count quota for team-b.
+#
+# `count/<resource>.<api group>` counts any namespaced resource; core
+# resources have no group (count/configmaps, count/secrets).
+#
+#   kubectl apply -f modules/02-namespaces-labels/solutions/team-b-object-quota.yaml
+#   kubectl create deployment d1 --image=nginx:1.27-alpine -n lab-namespaces-team-b
+#   kubectl create deployment d2 --image=nginx:1.27-alpine -n lab-namespaces-team-b
+#   kubectl create deployment d3 --image=nginx:1.27-alpine -n lab-namespaces-team-b
+#   -> error: failed to create deployment: deployments.apps "d3" is forbidden:
+#      exceeded quota: team-b-objects, requested: count/deployments.apps=1,
+#      used: count/deployments.apps=2, limited: count/deployments.apps=2
+#
+# Pods still need no resources in team-b: this quota does not limit cpu/memory.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: team-b-objects
+  namespace: lab-namespaces-team-b
+  labels:
+    app: namespaces
+spec:
+  hard:
+    count/deployments.apps: "2"
+    count/secrets: "10"

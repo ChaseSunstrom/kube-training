@@ -1,0 +1,26 @@
+# 03 - A container with NO shell and no tools at all.
+#
+#   kubectl apply -f modules/16-debugging/03-no-shell.yaml
+#   kubectl -n lab-debugging exec whoami -- sh      # fails: no sh in the image
+#
+# traefik/whoami is built FROM scratch: one static binary, nothing else.
+# Distroless and scratch images are great for security (nothing for an
+# attacker to use) and terrible for `kubectl exec`. This is what ephemeral
+# debug containers (`kubectl debug --target`) are for - README step 8.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: whoami
+  namespace: lab-debugging
+  labels:
+    app: whoami
+spec:
+  containers:
+    - name: whoami
+      image: traefik/whoami:v1.10
+      ports:
+        - name: http
+          containerPort: 80
+      resources:
+        requests: { cpu: 5m, memory: 8Mi }
+        limits:   { cpu: 50m, memory: 32Mi }

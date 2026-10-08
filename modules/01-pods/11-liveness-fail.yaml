@@ -1,0 +1,42 @@
+# 11 - A liveness probe that is DESIGNED to start failing, so you can watch
+# the kubelet kill and restart a container.
+#
+# The container creates /tmp/healthy, deletes it after 20 seconds, then keeps
+# "running" (sleeping) - like an app that is up but deadlocked. The liveness
+# probe checks for the file every 5s; after 3 failures in a row the kubelet
+# restarts the container. On every restart the file is recreated, so the
+# cycle repeats: RESTARTS goes up roughly every 35s.
+#
+#   kubectl apply -f modules/01-pods/11-liveness-fail.yaml
+#   kubectl get pod liveness-fail -n lab-pods -w
+#   kubectl describe pod liveness-fail -n lab-pods | tail     # "Liveness probe failed" / "will be restarted"
+#   kubectl logs liveness-fail -n lab-pods --previous         # logs of the killed container
+apiVersion: v1
+kind: Pod
+metadata:
+  name: liveness-fail
+  namespace: lab-pods
+  labels:
+    app: liveness-fail
+spec:
+  containers:
+    - name: app
+      image: busybox:1.37
+      command:
+        - sh
+        - -c
+        - |
+          trap 'echo "got SIGTERM from the kubelet"; exit 143' TERM
+          touch /tmp/healthy; echo "healthy"
+          sleep 20 & wait
+          rm /tmp/healthy;    echo "now pretending to be stuck"
+          sleep 3600 & wait
+      livenessProbe:
+        exec:
+          command: ["cat", "/tmp/healthy"]
+        initialDelaySeconds: 5
+        periodSeconds: 5
+        failureThreshold: 3
+      resources:
+        requests: { cpu: 5m, memory: 8Mi }
+        limits: { cpu: 50m, memory: 16Mi }

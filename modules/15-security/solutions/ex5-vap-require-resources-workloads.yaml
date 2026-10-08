@@ -1,0 +1,70 @@
+# Exercise 5 - solution: policy 10 extended to Deployments, StatefulSets,
+# DaemonSets and Jobs, and to init containers (which include native sidecars).
+#
+#   kubectl apply -f modules/15-security/solutions/ex5-vap-require-resources-workloads.yaml
+#   kubectl -n lab-security create deployment nolimits --image=busybox:1.37 -- sleep 3600
+#     -> denied at create time, the Deployment is never stored
+#
+# It REPLACES lab-security-require-resources from file 10 (same names).
+# Tricks used:
+#   * a variable that finds the pod spec in any of the matched kinds
+#   * a variable holding the "is this container OK?" check, reused in both
+#     the validation and the message (CEL variables can't take arguments, so
+#     we compute the list of offenders once and test it for emptiness)
+#   * init containers are included - a native sidecar (restartPolicy: Always)
+#     runs for the pod's whole life and needs limits as much as the app does.
+#     (Strictly, plain init containers only need them because they count
+#     towards the pod's effective requests; requiring them keeps it simple.)
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: lab-security-require-resources
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE"]
+        resources: ["pods"]
+      - apiGroups: ["apps"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["deployments", "statefulsets", "daemonsets"]
+      - apiGroups: ["batch"]
+        apiVersions: ["v1"]
+        operations: ["CREATE"]
+        resources: ["jobs"]
+  variables:
+    - name: podSpec
+      expression: "object.kind == 'Pod' ? object.spec : object.spec.template.spec"
+    - name: containers
+      expression: >-
+        variables.podSpec.containers +
+        (has(variables.podSpec.initContainers) ? variables.podSpec.initContainers : [])
+    - name: offenders
+      expression: >-
+        variables.containers.filter(c,
+          !(has(c.resources) &&
+            has(c.resources.requests) && 'cpu' in c.resources.requests && 'memory' in c.resources.requests &&
+            has(c.resources.limits) && 'memory' in c.resources.limits)
+        ).map(c, c.name)
+  validations:
+    - expression: "size(variables.offenders) == 0"
+      messageExpression: >-
+        object.kind + ' ' + object.metadata.name +
+        ': every container needs resources.requests.cpu, resources.requests.memory and resources.limits.memory; missing in: '
+        + variables.offenders.join(', ')
+      reason: Invalid
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: lab-security-require-resources
+spec:
+  policyName: lab-security-require-resources
+  validationActions: ["Deny"]
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: lab-security

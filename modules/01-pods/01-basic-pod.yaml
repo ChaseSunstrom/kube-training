@@ -1,0 +1,34 @@
+# 01 - A basic Pod.
+#
+# A Pod is the smallest thing Kubernetes schedules: one or more containers
+# that always run together on the same node and share a network namespace
+# (one IP, one localhost) and, optionally, volumes.
+#
+#   kubectl apply -f modules/01-pods/01-basic-pod.yaml
+#   kubectl get pod web -n lab-pods -o wide -w     # Pending -> ContainerCreating -> Running
+#   kubectl describe pod web -n lab-pods            # conditions + events
+#
+# A bare Pod like this is "pets, not cattle": if its node dies, nobody
+# recreates it. You will almost always create Pods through a controller
+# (Deployment, StatefulSet, Job...). Bare pods are perfect for learning.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web
+  namespace: lab-pods
+  labels:
+    app: web
+spec:
+  containers:
+    - name: nginx
+      image: nginx:1.27-alpine
+      ports:
+        - name: http
+          containerPort: 80     # informational; Services can refer to it by name
+      resources:
+        requests:               # reserved for scheduling
+          cpu: 10m
+          memory: 16Mi
+        limits:                 # enforced by the kernel
+          cpu: 100m
+          memory: 64Mi

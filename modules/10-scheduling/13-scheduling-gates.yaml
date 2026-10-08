@@ -1,0 +1,31 @@
+# 13 - Pod scheduling gates (GA since Kubernetes 1.30).
+#
+# A pod with a non-empty spec.schedulingGates list is created but NOT handed
+# to the scheduler: STATUS shows SchedulingGated, and it doesn't burn
+# scheduler cycles or generate FailedScheduling events. Some other actor (a
+# queue controller like Kueue, a quota system, an operator, or you) removes
+# the gates when the pod may run.
+#
+# Rules: gates can only be set at creation time and can only be REMOVED
+# afterwards, never added. While gated you may still tighten the pod's
+# scheduling constraints (e.g. add nodeSelector / node affinity terms).
+#
+# Release it (lab step 12):
+#   kubectl -n lab-scheduling patch pod gated --type=json \
+#     -p '[{"op":"remove","path":"/spec/schedulingGates"}]'
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gated
+  namespace: lab-scheduling
+  labels:
+    app: gated
+spec:
+  schedulingGates:
+    - name: training.example.com/wait-for-approval   # any qualified name
+  containers:
+    - name: app
+      image: traefik/whoami:v1.10
+      resources:
+        requests: {cpu: 10m, memory: 16Mi}
+        limits: {cpu: 50m, memory: 32Mi}

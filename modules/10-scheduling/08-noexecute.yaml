@@ -1,0 +1,84 @@
+# 08 - NoExecute taints and tolerationSeconds: eviction of RUNNING pods.
+#
+# Three bare pods (no Deployment, so nothing recreates them) pinned to
+# kube-training-worker2 with nodeSelector. Apply this file, wait until all
+# three are Running, then add a NoExecute taint to that node:
+#
+#   kubectl taint nodes kube-training-worker2 lab-scheduling/maintenance=now:NoExecute
+#
+#   evict-now        no toleration        -> evicted (deleted) immediately
+#   evict-after-30s  tolerationSeconds 30 -> keeps running for 30 s, then evicted
+#   never-evicted    toleration, no tolerationSeconds -> stays forever
+#
+# and remove the taint afterwards:
+#
+#   kubectl taint nodes kube-training-worker2 lab-scheduling/maintenance-
+#
+# Kubernetes uses exactly this mechanism itself: when a node goes NotReady or
+# unreachable, the node controller adds node.kubernetes.io/not-ready or
+# node.kubernetes.io/unreachable with effect NoExecute, and every pod gets
+# a default toleration for both with tolerationSeconds: 300 (added by the
+# DefaultTolerationSeconds admission plugin). That's why pods on a dead node
+# are only replaced after ~5 minutes.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: evict-now
+  namespace: lab-scheduling
+  labels:
+    app: noexecute-demo
+spec:
+  nodeSelector:
+    training/zone: zone-b
+  terminationGracePeriodSeconds: 5
+  containers:
+    - name: app
+      image: traefik/whoami:v1.10
+      resources:
+        requests: {cpu: 10m, memory: 16Mi}
+        limits: {cpu: 50m, memory: 32Mi}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: evict-after-30s
+  namespace: lab-scheduling
+  labels:
+    app: noexecute-demo
+spec:
+  nodeSelector:
+    training/zone: zone-b
+  terminationGracePeriodSeconds: 5
+  tolerations:
+    - key: lab-scheduling/maintenance
+      operator: Exists
+      effect: NoExecute
+      tolerationSeconds: 30        # "I can stay for 30 s after the taint appears"
+  containers:
+    - name: app
+      image: traefik/whoami:v1.10
+      resources:
+        requests: {cpu: 10m, memory: 16Mi}
+        limits: {cpu: 50m, memory: 32Mi}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: never-evicted
+  namespace: lab-scheduling
+  labels:
+    app: noexecute-demo
+spec:
+  nodeSelector:
+    training/zone: zone-b
+  terminationGracePeriodSeconds: 5
+  tolerations:
+    - key: lab-scheduling/maintenance
+      operator: Exists
+      effect: NoExecute            # no tolerationSeconds = tolerate forever
+  containers:
+    - name: app
+      image: traefik/whoami:v1.10
+      resources:
+        requests: {cpu: 10m, memory: 16Mi}
+        limits: {cpu: 50m, memory: 32Mi}

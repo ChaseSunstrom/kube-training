@@ -1,0 +1,35 @@
+# 02 - A pod that crashes every ~15 seconds, so you can practise
+#      `kubectl logs --previous` and reading lastState.
+#
+#   kubectl apply -f modules/16-debugging/02-flaky.yaml
+#
+# Each run prints a few lines, then exits with code 3. The kubelet restarts it
+# (restartPolicy: Always) with an exponential back-off: 10s, 20s, 40s, ... up
+# to 5 minutes - that waiting period is what "CrashLoopBackOff" means.
+# The *current* container's logs are often empty or unhelpful; the crash is
+# in the PREVIOUS container's logs.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: flaky
+  namespace: lab-debugging
+  labels:
+    app: flaky
+spec:
+  restartPolicy: Always
+  containers:
+    - name: app
+      image: busybox:1.37
+      command:
+        - sh
+        - -c
+        - |
+          echo "$(date -Iseconds) starting up"
+          sleep 5
+          echo "$(date -Iseconds) connected to queue"
+          sleep 10
+          echo "$(date -Iseconds) FATAL: lost connection to queue (simulated)" >&2
+          exit 3
+      resources:
+        requests: { cpu: 5m, memory: 8Mi }
+        limits:   { cpu: 20m, memory: 16Mi }

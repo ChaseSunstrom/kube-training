@@ -1,0 +1,26 @@
+# Module 13 - NetworkPolicies
+#
+# Two namespaces, so we can test "allow from another namespace":
+#   lab-netpol        the server (backend) and two clients
+#   lab-netpol-other  two more clients and a second server
+#
+# NetworkPolicy namespaceSelectors match NAMESPACE LABELS. Since Kubernetes
+# 1.22 every namespace automatically carries
+#   kubernetes.io/metadata.name: <namespace name>
+# (set by the API server, can't be removed or changed), so you can select a
+# namespace by name without adding labels yourself.
+#
+# Cleanup: kubectl delete namespace lab-netpol lab-netpol-other
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-netpol
+  labels:
+    app: lab-netpol
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-netpol-other
+  labels:
+    app: lab-netpol

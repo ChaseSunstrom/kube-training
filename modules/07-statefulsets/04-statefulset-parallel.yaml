@@ -1,0 +1,60 @@
+# 04 - podManagementPolicy: Parallel.
+#
+# Same stable names and DNS, but the controller does NOT wait for web-0 to be
+# Ready before creating web-1: all pods are created (and on scale-down,
+# deleted) at once. Use it when your pods don't need to start in order - e.g.
+# a sharded cache where each member finds the others via DNS - and you want
+# faster scaling.
+#
+# Parallel only affects SCALING. Rolling updates still go one pod at a time,
+# highest ordinal first.
+#
+# The readiness probe deliberately takes ~5s so you can see the difference
+# with 02 in `kubectl get pods -w`.
+apiVersion: v1
+kind: Service
+metadata:
+  name: fast
+  namespace: lab-statefulsets
+  labels:
+    app: fast
+spec:
+  clusterIP: None
+  selector:
+    app: fast
+  ports:
+    - name: tcp
+      port: 8080
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: fast
+  namespace: lab-statefulsets
+  labels:
+    app: fast
+spec:
+  serviceName: fast
+  replicas: 3
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app: fast
+  template:
+    metadata:
+      labels:
+        app: fast
+    spec:
+      terminationGracePeriodSeconds: 5
+      containers:
+        - name: app
+          image: busybox:1.37
+          command: ["sh", "-c", "trap 'exit 0' TERM; sleep 36000 & wait $!"]
+          readinessProbe:
+            exec:
+              command: ["true"]
+            initialDelaySeconds: 5
+            periodSeconds: 2
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 50m, memory: 32Mi }

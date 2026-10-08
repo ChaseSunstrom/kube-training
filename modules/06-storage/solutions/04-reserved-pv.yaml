@@ -1,0 +1,54 @@
+# Solution to exercise 4 - reserve a PV for one specific claim.
+#
+# Two halves of a "pre-bind":
+#   PV.spec.claimRef   (namespace + name) -> no OTHER claim may take this PV
+#   PVC.spec.volumeName                   -> this claim only binds to that PV
+# Setting only volumeName is enough to pick the PV, but without claimRef
+# another claim could grab the PV first. With both, they bind immediately.
+#
+#   kubectl apply -f solutions/04-reserved-pv.yaml
+#   kubectl get pv lab-reserved-pv; kubectl get pvc reserved -n lab-storage
+#
+# Cleanup (cluster-scoped!): kubectl delete -f solutions/04-reserved-pv.yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: lab-reserved-pv
+  labels:
+    app: reserved-demo
+spec:
+  capacity:
+    storage: 200Mi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  claimRef:
+    namespace: lab-storage
+    name: reserved
+  hostPath:
+    path: /var/lab-reserved-pv
+    type: DirectoryOrCreate
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: training/zone
+              operator: In
+              values: ["zone-b"]
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: reserved
+  namespace: lab-storage
+  labels:
+    app: reserved-demo
+spec:
+  storageClassName: ""
+  volumeName: lab-reserved-pv
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 200Mi

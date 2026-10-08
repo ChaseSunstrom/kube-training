@@ -1,0 +1,35 @@
+# 04 - ResourceQuota: a budget for a whole namespace.
+#
+# The quota admission plugin checks every CREATE/UPDATE in the namespace
+# against `hard`. If the new object would push usage over a limit, the API
+# server REJECTS the request (HTTP 403 "exceeded quota"). Nothing that
+# already runs is ever killed because of a quota.
+#
+# Important side effect: once a quota limits requests.cpu/memory or
+# limits.cpu/memory, every new pod MUST declare those values (or get them
+# from a LimitRange, see 05-limitrange.yaml) - otherwise it is rejected
+# with "must specify limits.cpu ...".
+#
+#   kubectl apply -f modules/02-namespaces-labels/04-resourcequota.yaml
+#   kubectl describe resourcequota team-a-quota -n lab-namespaces-team-a
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: team-a-quota
+  namespace: lab-namespaces-team-a
+  labels:
+    app: namespaces
+spec:
+  hard:
+    # Compute: sums over all non-terminated pods in the namespace.
+    requests.cpu: 200m
+    requests.memory: 256Mi
+    limits.cpu: "1"
+    limits.memory: 512Mi
+    # Object counts.
+    pods: "4"
+    services: "5"
+    services.nodeports: "0"      # this team may not open NodePorts at all
+    count/configmaps: "5"        # count/<resource>.<group> works for any resource
+    persistentvolumeclaims: "2"
+    requests.storage: 2Gi

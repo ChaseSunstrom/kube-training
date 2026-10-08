@@ -1,0 +1,87 @@
+# 05 - Custom start ordinal + automatic PVC cleanup.
+#
+# .spec.ordinals.start: 1   -> pods are shard-1, shard-2, shard-3 (not 0..2).
+#   GA in 1.31. Useful when pod numbers must match something outside the
+#   cluster (shard IDs, broker IDs) or when moving pods between two
+#   StatefulSets/clusters one ordinal at a time.
+#
+# persistentVolumeClaimRetentionPolicy (GA in 1.32):
+#   whenScaled: Delete  -> scaling 3 -> 1 deletes data-shard-2 and data-shard-3
+#                          once those pods are gone.
+#   whenDeleted: Delete -> deleting the StatefulSet deletes all its PVCs.
+# The controller implements this with ownerReferences on the PVCs (to the
+# Pod for whenScaled, to the StatefulSet for whenDeleted) and lets the
+# garbage collector do the deleting.
+#
+# Only use Delete when the data is disposable or replicated elsewhere!
+apiVersion: v1
+kind: Service
+metadata:
+  name: shard
+  namespace: lab-statefulsets
+  labels:
+    app: shard
+spec:
+  clusterIP: None
+  selector:
+    app: shard
+  ports:
+    - name: tcp
+      port: 8080
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: shard
+  namespace: lab-statefulsets
+  labels:
+    app: shard
+spec:
+  serviceName: shard
+  replicas: 3
+  ordinals:
+    start: 1
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Delete
+    whenScaled: Delete
+  selector:
+    matchLabels:
+      app: shard
+  template:
+    metadata:
+      labels:
+        app: shard
+    spec:
+      terminationGracePeriodSeconds: 5
+      containers:
+        - name: app
+          image: busybox:1.37
+          # The pod-index label is also available via the Downward API.
+          env:
+            - name: SHARD_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['apps.kubernetes.io/pod-index']
+          command:
+            - sh
+            - -c
+            - |
+              trap 'exit 0' TERM
+              echo "I am shard $SHARD_ID" | tee /data/whoami
+              sleep 36000 & wait $!
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 50m, memory: 32Mi }
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          app: shard
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 50Mi

@@ -1,0 +1,97 @@
+# 02 - A StatefulSet: pods with a stable name, stable DNS and their own disk.
+#
+# Compared with a Deployment:
+#   * pods are named <sts>-<ordinal>: web-0, web-1, web-2 (not random hashes);
+#   * each pod gets ITS OWN PVC from volumeClaimTemplates (www-web-0,
+#     www-web-1, ...). When web-1 is deleted, the new web-1 gets the SAME PVC;
+#   * pods are created, scaled and updated in a defined order.
+#
+# The init container writes index.html only if it doesn't exist yet. So the
+# page shows which pod FIRST wrote the volume and when; after deleting a pod,
+# rescheduling or scaling down and up, the original text is still served.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: web
+  namespace: lab-statefulsets
+  labels:
+    app: web
+spec:
+  serviceName: web                 # the headless Service from 01
+  replicas: 3
+  selector:
+    matchLabels:
+      app: web                     # immutable after creation
+  # OrderedReady (default): create web-0, wait until it is Running AND Ready,
+  # then web-1, and so on. Scale down in reverse: web-2 first.
+  # Parallel: create/delete all pods at once (see 04).
+  podManagementPolicy: OrderedReady
+  updateStrategy:
+    type: RollingUpdate            # or OnDelete
+    rollingUpdate:
+      # Only pods with ordinal >= partition are updated. 0 = all of them.
+      # Raise it to canary a change on the highest ordinals only.
+      partition: 0
+  # What happens to the PVCs (default for both: Retain).
+  #   whenDeleted - when the StatefulSet itself is deleted
+  #   whenScaled  - when replicas is reduced
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      terminationGracePeriodSeconds: 10
+      initContainers:
+        - name: init-page
+          image: busybox:1.37
+          command:
+            - sh
+            - -c
+            - |
+              if [ ! -f /data/index.html ]; then
+                echo "page created by $(hostname) at $(date -u +%H:%M:%S)" > /data/index.html
+              fi
+          volumeMounts:
+            - name: www
+              mountPath: /data
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 50m, memory: 32Mi }
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          env:
+            # Not used by nginx; we change it to trigger rolling updates and
+            # check which pods run which revision.
+            - name: APP_VERSION
+              value: v1
+          ports:
+            - name: http
+              containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 2
+          volumeMounts:
+            - name: www
+              mountPath: /usr/share/nginx/html
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 100m, memory: 64Mi }
+  # One PVC per pod, named <template-name>-<pod-name>: www-web-0, www-web-1 ...
+  volumeClaimTemplates:
+    - metadata:
+        name: www
+        labels:
+          app: web
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        # storageClassName omitted -> default class ("standard" in kind)
+        resources:
+          requests:
+            storage: 100Mi

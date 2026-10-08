@@ -1,0 +1,25 @@
+# 03 - Default deny ALL ingress in lab-netpol.
+#
+# Without any NetworkPolicy, every pod accepts traffic from everywhere
+# ("default allow"). As soon as at least one policy with policyTypes: [Ingress]
+# SELECTS a pod, that pod becomes "isolated for ingress": only traffic that
+# some policy explicitly allows gets in. Policies are allow-lists and are
+# ADDITIVE - there is no "deny" rule and order doesn't matter.
+#
+#   podSelector: {}        -> selects every pod in the namespace
+#   policyTypes: [Ingress] -> this policy is about incoming traffic
+#   no "ingress:" rules    -> ... and allows nothing
+#
+# Egress (outgoing) is not affected by this policy.
+# Replies to allowed connections are always allowed (policies are stateful).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: lab-netpol
+  labels:
+    app: lab-netpol
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress

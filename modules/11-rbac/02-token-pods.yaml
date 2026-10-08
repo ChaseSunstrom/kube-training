@@ -1,0 +1,48 @@
+# 02 - What a pod gets from its ServiceAccount.
+#
+# token-mounted: runs as "default" -> the kubelet mounts a PROJECTED volume at
+#   /var/run/secrets/kubernetes.io/serviceaccount/ containing
+#     token      a short-lived, pod-bound JWT (renewed by the kubelet)
+#     ca.crt     the cluster CA, to verify the API server's certificate
+#     namespace  the pod's namespace
+#   Look at it:
+#     kubectl -n lab-rbac exec token-mounted -- ls /var/run/secrets/kubernetes.io/serviceaccount
+#     kubectl -n lab-rbac get pod token-mounted -o yaml   # see volumes: kube-api-access-xxxxx
+#
+# no-token: runs as no-api-access (automountServiceAccountToken: false) ->
+#   no such volume, the directory doesn't exist.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: token-mounted
+  namespace: lab-rbac
+  labels:
+    app: token-mounted
+spec:
+  # serviceAccountName omitted -> "default"
+  terminationGracePeriodSeconds: 1
+  containers:
+    - name: shell
+      image: busybox:1.37
+      command: ["sh", "-c", "sleep 3600"]
+      resources:
+        requests: {cpu: 5m, memory: 8Mi}
+        limits: {cpu: 50m, memory: 32Mi}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: no-token
+  namespace: lab-rbac
+  labels:
+    app: no-token
+spec:
+  serviceAccountName: no-api-access
+  terminationGracePeriodSeconds: 1
+  containers:
+    - name: shell
+      image: busybox:1.37
+      command: ["sh", "-c", "sleep 3600"]
+      resources:
+        requests: {cpu: 5m, memory: 8Mi}
+        limits: {cpu: 50m, memory: 32Mi}

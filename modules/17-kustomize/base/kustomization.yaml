@@ -1,0 +1,43 @@
+# base/ - what every environment has in common.
+#
+#   kubectl kustomize modules/17-kustomize/base        # render it (prints YAML, changes nothing)
+#
+# A base is deliberately environment-neutral: no namespace, no replica count
+# that only makes sense for prod, no environment names. Overlays add those.
+# (You *can* apply a base directly, but in this module you never do - it has
+# no namespace, so it would land in your current namespace.)
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Plain manifests, used as they are.
+resources:
+  - deployment.yaml
+  - service.yaml
+
+# Labels added to every object. "labels" replaces the deprecated
+# "commonLabels". includeSelectors: false keeps these labels OUT of
+# spec.selector, which matters because a Deployment's selector is immutable:
+# with commonLabels, changing a label value later breaks `kubectl apply`.
+labels:
+  - pairs:
+      app.kubernetes.io/name: web
+      app.kubernetes.io/part-of: kustomize-lab
+    includeSelectors: false
+    includeTemplates: true      # also put them on the pod template (so pods carry them)
+
+# Generates a ConfigMap named app-config-<hash>. The hash is computed from the
+# content; every reference to "app-config" (envFrom, volumes, ...) is rewritten
+# to the hashed name. Change a value -> new name -> the pod template changes ->
+# the Deployment rolls out. That is the whole point.
+configMapGenerator:
+  - name: app-config
+    literals:
+      - WHOAMI_NAME=base          # traefik/whoami prints this as "Name:" in every response
+      - FEATURE_SEARCH=off        # not used by whoami - just shows how overlays merge keys
+
+# Same idea for a Secret: app-secret-<hash>. The base ships a placeholder so
+# it renders on its own; each overlay REPLACES it with its own value.
+secretGenerator:
+  - name: app-secret
+    literals:
+      - API_TOKEN=change-me

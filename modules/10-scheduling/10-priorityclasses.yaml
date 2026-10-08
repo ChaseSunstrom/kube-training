@@ -1,0 +1,35 @@
+# 10 - PriorityClasses (cluster-scoped, hence the lab- prefix).
+#
+# A PriorityClass maps a name to an integer. Pods reference it with
+# spec.priorityClassName; the admission controller copies the integer into
+# spec.priority. Higher priority means:
+#   1. the pod is taken from the scheduling queue first, and
+#   2. if it doesn't fit anywhere, the scheduler may PREEMPT (evict)
+#      lower-priority pods to make room (see 11/12).
+#
+# Pods without a priorityClassName get priority 0 (unless some class has
+# globalDefault: true). User classes can use up to 1,000,000,000; the built-in
+# system-cluster-critical / system-node-critical (2,000,000,000+) are reserved
+# for things like CoreDNS and kube-proxy.
+#
+# Delete them when done: kubectl delete priorityclass lab-high lab-low
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: lab-high
+  labels:
+    app: lab-scheduling
+value: 100000
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority   # the default; "Never" = jump the queue but never evict
+description: "Training: important workload, may preempt lab-low pods."
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: lab-low
+  labels:
+    app: lab-scheduling
+value: 1000
+globalDefault: false
+description: "Training: best-effort batch work, first to be preempted."

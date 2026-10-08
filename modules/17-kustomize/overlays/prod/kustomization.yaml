@@ -1,0 +1,72 @@
+# overlays/prod - the same base, adjusted for production.
+#
+#   kubectl kustomize modules/17-kustomize/overlays/prod
+#   kubectl diff  -k modules/17-kustomize/overlays/prod
+#   kubectl apply -k modules/17-kustomize/overlays/prod
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+  - namespace.yaml
+
+# Reusable, optional feature: adds a PodDisruptionBudget (see components/pdb).
+components:
+  - ../../components/pdb
+
+namespace: lab-kustomize-prod
+
+# dev uses a prefix, prod a suffix - just to show both. Names become web-prod,
+# app-config-prod-<hash>, ...
+nameSuffix: -prod
+
+labels:
+  - pairs:
+      env: prod
+    includeSelectors: false
+    includeTemplates: true
+
+replicas:
+  - name: web
+    count: 3
+
+# Image override without touching the base. Here: pin the exact image by
+# digest (module 15). Other forms:
+#   newTag: v1.11                        change only the tag
+#   newName: registry.example.com/whoami change the registry/repository
+# CI pipelines typically run `kustomize edit set image traefik/whoami=...:<new>`
+# in the overlay directory to promote a new version.
+images:
+  - name: traefik/whoami
+    digest: sha256:1699d99cb4b9acc17f74ca670b3d8d0b7ba27c948b3445f0593b58ebece92f04
+
+configMapGenerator:
+  - name: app-config
+    behavior: merge
+    literals:
+      - WHOAMI_NAME=kustomize-prod
+
+secretGenerator:
+  - name: app-secret
+    behavior: replace
+    envs:
+      - secrets.env            # KEY=value lines (see the warning inside the file)
+
+patches:
+  # Strategic merge patch - target found from the file's kind + metadata.name.
+  - path: patches/resources.yaml
+  # JSON 6902 patch - needs an explicit target.
+  - path: patches/rollout.yaml
+    target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: web
+  # Small patches can be inline. This one annotates every Service.
+  - target:
+      kind: Service
+    patch: |-
+      - op: add
+        path: /metadata/annotations
+        value:
+          lab.example.com/owner: team-web

@@ -1,0 +1,51 @@
+# Solution to exercise 3: let kubectl-client list pods in ALL namespaces.
+#
+# `kubectl get pods -A` is a list at the CLUSTER scope (/api/v1/pods). A
+# RoleBinding (even to a ClusterRole) only covers its own namespace, so this
+# needs a ClusterRoleBinding. Both objects are cluster-scoped -> lab- prefix.
+# Delete them afterwards:
+#   kubectl delete -f modules/11-rbac/solutions/03-cluster-pod-reader.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: lab-rbac-pod-reader-all
+  labels:
+    app: lab-rbac
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: lab-rbac-pod-viewer-all
+  labels:
+    app: lab-rbac
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: lab-rbac-pod-reader-all
+subjects:
+  - kind: ServiceAccount
+    name: pod-viewer
+    namespace: lab-rbac
+---
+# The same client, now listing every namespace.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kubectl-client-all
+  namespace: lab-rbac
+  labels:
+    app: kubectl-client
+spec:
+  serviceAccountName: pod-viewer
+  restartPolicy: Never
+  containers:
+    - name: kubectl
+      image: rancher/kubectl:v1.36.2
+      args: ["get", "pods", "--all-namespaces"]
+      resources:
+        requests: {cpu: 10m, memory: 32Mi}
+        limits: {cpu: 200m, memory: 128Mi}

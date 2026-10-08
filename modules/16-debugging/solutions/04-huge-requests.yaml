@@ -1,0 +1,39 @@
+# Solution 04 - ml-trainer: it requested 64 CPUs and 256Gi of memory.
+# No node can satisfy that, so the scheduler leaves the pod Pending forever
+# ("Insufficient cpu, Insufficient memory").
+#
+#   kubectl apply -f modules/16-debugging/solutions/04-huge-requests.yaml
+#   kubectl -n lab-debugging rollout status deploy/ml-trainer
+#
+# Compare with what the nodes have:
+#   kubectl describe nodes | grep -A 7 'Allocated resources'
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ml-trainer
+  namespace: lab-debugging
+  labels:
+    app: ml-trainer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ml-trainer
+  template:
+    metadata:
+      labels:
+        app: ml-trainer
+    spec:
+      containers:
+        - name: trainer
+          image: busybox:1.37
+          command: ["sh", "-c", "echo training; sleep 86400"]
+          resources:
+            # FIX: was 64 CPUs / 256Gi - more than any node has. Requests must fit
+            # on ONE node (allocatable minus what is already requested there).
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 64Mi

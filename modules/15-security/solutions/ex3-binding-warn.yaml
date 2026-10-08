@@ -1,0 +1,23 @@
+# Exercise 3 - solution: the same binding as in 09, switched to Warn + Audit.
+#
+#   kubectl apply -f modules/15-security/solutions/ex3-binding-warn.yaml
+#   kubectl apply -f modules/15-security/vap/01-latest-tag-pod.yaml
+#     -> Warning: Validation failed for ValidatingAdmissionPolicy ... ; pod/latest-tag created
+#
+# This is how you introduce a new policy in a real cluster: Warn/Audit first,
+# clean up the offenders, then switch to Deny. ("Deny" and "Warn" together is
+# also valid: reject AND show the message as a warning.)
+# Put it back afterwards:
+#   kubectl -n lab-security delete pod latest-tag
+#   kubectl apply -f modules/15-security/09-vap-deny-latest.yaml
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: lab-security-deny-latest-tag
+spec:
+  policyName: lab-security-deny-latest-tag
+  validationActions: ["Warn", "Audit"]
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: lab-security

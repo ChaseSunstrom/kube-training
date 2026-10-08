@@ -1,0 +1,103 @@
+# 04 - Environment variables and the Downward API.
+#
+# The Downward API lets a container learn facts about ITSELF (its pod name,
+# namespace, IP, node, labels, resource limits...) without talking to the
+# API server and without any credentials. Two ways to receive them:
+#   * env vars  (fieldRef / resourceFieldRef) - fixed at container start
+#   * a downwardAPI volume - files that the kubelet UPDATES when labels or
+#     annotations change
+#
+#   kubectl apply -f modules/01-pods/04-env-downward-api.yaml
+#   kubectl logs env-demo -n lab-pods
+#   kubectl exec env-demo -n lab-pods -- env | sort
+#   kubectl exec env-demo -n lab-pods -- cat /etc/podinfo/labels
+#
+# ConfigMaps and Secrets as env vars are module 05.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: env-demo
+  namespace: lab-pods
+  labels:
+    app: env-demo
+    tier: backend
+  annotations:
+    training/owner: "you"
+spec:
+  containers:
+    - name: app
+      image: busybox:1.37
+      command:
+        - sh
+        - -c
+        - |
+          echo "I am $POD_NAME in namespace $POD_NAMESPACE"
+          echo "my IP is $POD_IP, I run on node $NODE_NAME as serviceaccount $SA_NAME"
+          echo "memory limit: $MEM_LIMIT_MI MiB, cpu request: $CPU_REQUEST_M millicores"
+          echo "GREETING=$GREETING"
+          echo "BANNER=$BANNER"
+          # Keep running; handle SIGTERM so `kubectl delete` is quick (see 14-*.yaml).
+          trap 'exit 0' TERM; sleep infinity & wait
+      env:
+        # 1. Plain values. Always strings - quote numbers and booleans in YAML.
+        - name: GREETING
+          value: "hello"
+        - name: REPLICA_COUNT
+          value: "3"
+        # 2. Downward API: pod fields.
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: SA_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.serviceAccountName
+        # 3. Downward API: this container's own resources, scaled by `divisor`.
+        - name: MEM_LIMIT_MI
+          valueFrom:
+            resourceFieldRef:
+              containerName: app
+              resource: limits.memory
+              divisor: 1Mi
+        - name: CPU_REQUEST_M
+          valueFrom:
+            resourceFieldRef:
+              containerName: app
+              resource: requests.cpu
+              divisor: 1m
+        # 4. Dependent variables: $(VAR) is expanded by KUBERNETES (not by a
+        #    shell) using variables defined EARLIER in this list.
+        - name: BANNER
+          value: "$(GREETING) from $(POD_NAME)"
+      volumeMounts:
+        - name: podinfo
+          mountPath: /etc/podinfo
+          readOnly: true
+      resources:
+        requests: { cpu: 5m, memory: 8Mi }
+        limits: { cpu: 50m, memory: 32Mi }
+  volumes:
+    # Labels and annotations as files. Unlike env vars, these are refreshed
+    # (within about a minute) when you `kubectl label` / `kubectl annotate` the pod.
+    - name: podinfo
+      downwardAPI:
+        items:
+          - path: labels
+            fieldRef:
+              fieldPath: metadata.labels
+          - path: annotations
+            fieldRef:
+              fieldPath: metadata.annotations

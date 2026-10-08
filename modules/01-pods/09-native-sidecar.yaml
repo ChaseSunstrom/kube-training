@@ -1,0 +1,80 @@
+# 09 - Native sidecar containers (stable since Kubernetes 1.33).
+#
+# A sidecar is a helper that must run for the WHOLE life of the app container:
+# log shippers, proxies (service mesh), config reloaders. Declare it as an
+# init container with `restartPolicy: Always`. The kubelet then:
+#   * starts it in init-container order, but does NOT wait for it to exit -
+#     only for it to be "started" (its startupProbe, if any, passes);
+#   * starts the app containers next, while the sidecar keeps running;
+#   * restarts it if it crashes, even in a pod with restartPolicy: Never;
+#   * stops it AFTER the app containers when the pod terminates, and does not
+#     let it keep the pod alive: when the app finishes, the pod can complete.
+#
+# The last point is what plain "second container" sidecars never got right:
+# a Job whose log-shipper is a normal container never finishes.
+#
+#   kubectl apply -f modules/01-pods/09-native-sidecar.yaml
+#   kubectl get pod sidecar-demo -n lab-pods -w        # 2/2 Running ... -> Completed
+#   kubectl logs sidecar-demo -n lab-pods -c log-shipper
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sidecar-demo
+  namespace: lab-pods
+  labels:
+    app: sidecar-demo
+spec:
+  restartPolicy: Never          # a one-shot "batch" pod, like a Job's pod
+  initContainers:
+    - name: log-shipper
+      image: busybox:1.37
+      restartPolicy: Always     # <- this one line makes it a sidecar
+      command:
+        - sh
+        - -c
+        - |
+          trap 'echo "[shipper] got SIGTERM, flushing and exiting"; exit 0' TERM
+          touch /var/log/app/app.log
+          echo "[shipper] started, tailing app.log"
+          # -F: keep following even if the file is recreated. A real shipper
+          # (fluent-bit, vector...) would send each line to a log backend.
+          tail -F /var/log/app/app.log | while read -r line; do
+            echo "[shipped] $line"
+          done &
+          wait
+      # The app container is only started once this probe succeeds,
+      # so the app never logs before the shipper is ready.
+      startupProbe:
+        exec:
+          command: ["test", "-f", "/var/log/app/app.log"]
+        periodSeconds: 1
+        failureThreshold: 10
+      volumeMounts:
+        - name: logs
+          mountPath: /var/log/app
+      resources:
+        requests: { cpu: 5m, memory: 8Mi }
+        limits: { cpu: 50m, memory: 16Mi }
+  containers:
+    - name: app
+      image: busybox:1.37
+      command:
+        - sh
+        - -c
+        - |
+          for i in 1 2 3 4 5; do
+            echo "processing item $i" >> /var/log/app/app.log
+            sleep 2
+          done
+          echo "all items processed" >> /var/log/app/app.log
+          sleep 1                 # give the shipper a moment to read the last line
+          echo "app done, exiting 0"
+      volumeMounts:
+        - name: logs
+          mountPath: /var/log/app
+      resources:
+        requests: { cpu: 5m, memory: 8Mi }
+        limits: { cpu: 50m, memory: 16Mi }
+  volumes:
+    - name: logs
+      emptyDir: {}

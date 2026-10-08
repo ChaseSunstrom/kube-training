@@ -1,0 +1,72 @@
+# 05 - command/args vs the image's ENTRYPOINT/CMD.
+#
+#   Image (Dockerfile)   Pod spec      Meaning
+#   ENTRYPOINT           command       the executable
+#   CMD                  args          its default arguments
+#
+#   You set...            the container runs...
+#   nothing               ENTRYPOINT + CMD          (image defaults)
+#   args only             ENTRYPOINT + args         (CMD is ignored)
+#   command only          command                   (ENTRYPOINT AND CMD ignored)
+#   command + args        command + args
+#
+# Find an image's defaults with:
+#   docker image inspect hashicorp/http-echo:1.0 --format '{{.Config.Entrypoint}} {{.Config.Cmd}}'
+#   -> [/http-echo] []
+#
+#   kubectl apply -f modules/01-pods/05-command-args.yaml
+#   kubectl logs args-only -n lab-pods
+#   kubectl logs command-and-args -n lab-pods
+#
+# There is NO shell unless you start one: `command: ["echo", "$HOME"]` prints
+# the literal text $HOME. Kubernetes itself only expands $(VAR) references to
+# env vars defined in the container spec.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: args-only
+  namespace: lab-pods
+  labels:
+    app: command-demo
+spec:
+  containers:
+    - name: echo
+      # ENTRYPOINT is /http-echo. We only pass arguments, so the entrypoint is kept.
+      image: hashicorp/http-echo:1.0
+      args:
+        - "-listen=:8080"
+        - "-text=hello from args-only"
+      ports:
+        - containerPort: 8080
+      resources:
+        requests: { cpu: 5m, memory: 8Mi }
+        limits: { cpu: 50m, memory: 16Mi }
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: command-and-args
+  namespace: lab-pods
+  labels:
+    app: command-demo
+spec:
+  restartPolicy: OnFailure      # it is a one-shot script, so let it finish
+  containers:
+    - name: shell
+      image: busybox:1.37       # CMD is ["sh"]; we replace it entirely
+      env:
+        - name: GREETING
+          value: "hi"
+      # The common pattern: `command` starts a shell, `args` is the script.
+      command: ["sh", "-c"]
+      args:
+        - |
+          echo "1. $(GREETING) was expanded by Kubernetes before the shell ran"
+          echo "2. $GREETING was expanded by the shell at runtime"
+          # $$(VAR) escapes Kubernetes expansion; the single quotes stop the shell
+          # from treating $(...) as command substitution.
+          echo '3. not expanded by anyone: $$(GREETING)'
+          echo "4. my hostname is $HOSTNAME"
+      resources:
+        requests: { cpu: 5m, memory: 8Mi }
+        limits: { cpu: 50m, memory: 16Mi }

@@ -1,0 +1,63 @@
+# Exercise 4 - solution: redis:7.4-alpine under the "restricted" profile with a
+# read-only root filesystem.
+#
+#   kubectl apply -f modules/15-security/solutions/ex4-redis-restricted.yaml
+#   kubectl -n lab-security-restricted rollout status deploy/redis
+#   kubectl -n lab-security-restricted exec deploy/redis -- redis-cli SET hello world
+#   kubectl -n lab-security-restricted exec deploy/redis -- redis-cli GET hello
+#   kubectl -n lab-security-restricted exec deploy/redis -- id
+#
+# How to work it out yourself:
+#   docker run --rm --entrypoint id redis:7.4-alpine redis   -> uid=999(redis) gid=1000(redis)
+#   The image declares VOLUME /data and WORKDIR /data. Its entrypoint only
+#   chowns /data and switches user when it starts as root - as uid 999 it just
+#   execs redis-server, so all redis needs is a writable /data.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: lab-security-restricted
+  labels:
+    app: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 1000
+        fsGroup: 1000          # makes the /data emptyDir group-writable for redis
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: redis
+          image: redis:7.4-alpine
+          ports:
+            - name: redis
+              containerPort: 6379
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            periodSeconds: 5
+          resources:
+            requests: { cpu: 20m, memory: 32Mi }
+            limits:   { cpu: 200m, memory: 128Mi }
+      volumes:
+        - name: data
+          emptyDir: {}     # a real deployment would use a PVC (module 06/07)

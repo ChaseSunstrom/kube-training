@@ -1,0 +1,70 @@
+# 02 - Consuming a ConfigMap as ENVIRONMENT VARIABLES.
+#
+# Three techniques in one pod:
+#   1. env[].valueFrom.configMapKeyRef  - pick ONE key, choose the env name
+#   2. envFrom[].configMapRef (+prefix) - import EVERY key of the ConfigMap
+#   3. env[].valueFrom.fieldRef         - the Downward API: facts about the pod
+#                                         itself (name, node, IP ...)
+#
+# Key fact: environment variables are resolved ONCE, when the container
+# starts. Changing the ConfigMap later does NOT change the env of a running
+# container - you have to restart it (see 04-deployment-restart.yaml).
+#
+# Look at the result with:
+#   kubectl logs -n lab-config env-demo
+apiVersion: v1
+kind: Pod
+metadata:
+  name: env-demo
+  namespace: lab-config
+  labels:
+    app: env-demo
+spec:
+  containers:
+    - name: app
+      image: busybox:1.37
+      # Print the interesting variables once, then idle so we can exec in.
+      command: ["sh", "-c", "env | sort | grep -E '^(COLOR|MODE|CFG_|POD_|NODE_|OPTIONAL)'; sleep 3600"]
+      env:
+        # 1. Single key, renamed: APP_COLOR in the ConfigMap -> COLOR in the pod.
+        - name: COLOR
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: APP_COLOR
+        - name: MODE
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: APP_MODE
+        # A key that does not exist. Without "optional: true" the container
+        # would refuse to start (CreateContainerConfigError). With it, the
+        # variable is simply not set.
+        - name: OPTIONAL_SETTING
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: does-not-exist
+              optional: true
+        # 3. Downward API: the pod learns its own name and the node it runs on.
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+      envFrom:
+        # 2. Every key of app-config becomes a variable, prefixed with CFG_.
+        #    Note: "app.properties" becomes CFG_app.properties. Current
+        #    Kubernetes accepts such names (RelaxedEnvironmentVariableValidation);
+        #    older clusters SKIPPED keys that were not valid C identifiers and
+        #    emitted an InvalidEnvironmentVariableNames event instead.
+        #    Lesson: keep ConfigMaps used with envFrom to env-style keys only.
+        - prefix: CFG_
+          configMapRef:
+            name: app-config
+      resources:
+        requests: { cpu: 10m, memory: 16Mi }
+        limits:   { cpu: 50m, memory: 32Mi }

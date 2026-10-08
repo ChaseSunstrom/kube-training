@@ -1,0 +1,40 @@
+# Solution to exercise 2 - volumeBindingMode: Immediate with node-local storage.
+#
+#   kubectl apply -f solutions/02-immediate-storageclass.yaml
+#   kubectl describe pvc too-early -n lab-storage
+#
+# The PVC stays Pending with:
+#   failed to provision volume with StorageClass "lab-immediate":
+#   configuration error, no node was specified
+#
+# With Immediate, provisioning starts the moment the PVC exists - before any
+# pod is scheduled - so a node-local provisioner has no idea WHICH node to put
+# the directory on. Network storage would just pick a zone; for zonal cloud
+# disks that is how you end up with a volume in zone A and a pod that can only
+# run in zone B. WaitForFirstConsumer avoids both problems.
+#
+# Cleanup (cluster-scoped!):  kubectl delete -f solutions/02-immediate-storageclass.yaml
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: lab-immediate
+  labels:
+    app: storage
+provisioner: rancher.io/local-path
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: too-early
+  namespace: lab-storage
+  labels:
+    app: immediate-demo
+spec:
+  storageClassName: lab-immediate
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Mi

@@ -1,0 +1,104 @@
+# Solution 10 - inventory: the init container waited for a Service called
+# inventory-cache, which doesn't exist (the Service is inventory-redis), so
+# DNS never resolves ("nc: bad address 'inventory-cache'") and the pod stays
+# Init:0/1 forever - the app container never starts.
+#
+#   kubectl apply -f modules/16-debugging/solutions/10-stuck-init.yaml
+#   kubectl -n lab-debugging rollout status deploy/inventory
+#   kubectl -n lab-debugging logs deploy/inventory --tail=3
+#
+# A "wait for X" init container should log what it waits for (this one does)
+# and ideally give up after a while so the failure becomes visible.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inventory-redis
+  namespace: lab-debugging
+  labels:
+    app: inventory-redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: inventory-redis
+  template:
+    metadata:
+      labels:
+        app: inventory-redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7.4-alpine
+          ports:
+            - name: redis
+              containerPort: 6379
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 100m, memory: 64Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: inventory-redis
+  namespace: lab-debugging
+  labels:
+    app: inventory-redis
+spec:
+  selector:
+    app: inventory-redis
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: redis
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inventory
+  namespace: lab-debugging
+  labels:
+    app: inventory
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: inventory
+  template:
+    metadata:
+      labels:
+        app: inventory
+    spec:
+      initContainers:
+        # Wait until the cache answers before starting the app.
+        - name: wait-for-cache
+          image: busybox:1.37
+          command:
+            - sh
+            - -c
+            - |
+              # FIX: was "inventory-cache" - the Service is called inventory-redis
+              until nc -z -w 2 inventory-redis 6379; do
+                echo "$(date -Iseconds) waiting for inventory-redis:6379 ..."
+                sleep 3
+              done
+              echo "cache is up"
+          resources:
+            requests: { cpu: 5m, memory: 8Mi }
+            limits:   { cpu: 20m, memory: 16Mi }
+      containers:
+        - name: app
+          image: redis:7.4-alpine          # stand-in app: uses redis-cli as its "client"
+          env:
+            - name: REDIS_HOST
+              value: inventory-redis
+          command:
+            - sh
+            - -c
+            - |
+              while true; do
+                echo "$(date -Iseconds) items in stock: $(redis-cli -h "$REDIS_HOST" INCR stock)"
+                sleep 5
+              done
+          resources:
+            requests: { cpu: 5m, memory: 8Mi }
+            limits:   { cpu: 50m, memory: 32Mi }

@@ -1,0 +1,47 @@
+# 09 - A claim from the lab-retain class, and a pod that writes to it.
+#
+# After you delete BOTH the pod and the PVC, look at the PV: it is Released,
+# not gone, and the data directory still exists on the node.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: precious
+  namespace: lab-storage
+  labels:
+    app: retain-demo
+spec:
+  storageClassName: lab-retain
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: retain-user
+  namespace: lab-storage
+  labels:
+    app: retain-demo
+spec:
+  containers:
+    - name: app
+      image: busybox:1.37
+      command:
+        - sh
+        - -c
+        - |
+          trap 'exit 0' TERM
+          echo "very important data" > /data/important.txt
+          sleep 3600 & wait $!
+      volumeMounts:
+        - name: data
+          mountPath: /data
+      resources:
+        requests: { cpu: 10m, memory: 16Mi }
+        limits:   { cpu: 50m, memory: 32Mi }
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: precious

@@ -1,0 +1,12 @@
+# Module 07 - StatefulSets
+#
+# Everything lives in lab-statefulsets. The PVCs created from
+# volumeClaimTemplates are NOT deleted with the StatefulSet by default, but
+# they are namespaced, so deleting the namespace removes them (and the
+# dynamically provisioned PVs behind them, reclaim policy Delete).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-statefulsets
+  labels:
+    app: statefulsets

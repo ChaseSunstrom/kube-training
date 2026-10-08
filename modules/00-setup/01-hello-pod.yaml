@@ -1,0 +1,37 @@
+# Your first Pod: a single nginx container.
+#
+#   kubectl apply -f modules/00-setup/01-hello-pod.yaml
+#   kubectl get pod hello -n lab-setup -o wide     # which node? which IP?
+#   kubectl port-forward pod/hello 8080:80 -n lab-setup   # then open http://localhost:8080
+#
+# Things to notice:
+# * apiVersion + kind tell the API server WHAT this is; metadata says WHO it
+#   is (name, namespace, labels); spec says WHAT YOU WANT. The server adds a
+#   `status` section that says WHAT IS (look at it with `-o yaml`).
+# * You never write `status` yourself - controllers and the kubelet fill it in.
+# * A bare Pod is not self-healing: delete it and it is gone. Real workloads
+#   use a Deployment (02-hello-deployment.yaml, and module 03).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: hello
+  namespace: lab-setup        # set explicitly so `kubectl apply` never lands in `default`
+  labels:
+    app: hello
+spec:
+  containers:
+    - name: nginx
+      image: nginx:1.27-alpine  # always pin a tag; `:latest` makes runs unrepeatable
+      ports:
+        - name: http
+          containerPort: 80     # documentation only - it does NOT open or block anything
+      resources:
+        # requests = what the scheduler reserves for this container on a node;
+        # limits   = the hard ceiling enforced by the kernel (cgroups).
+        # Module 01 explains both in detail.
+        requests:
+          cpu: 10m              # 10 millicores = 1% of one CPU core
+          memory: 16Mi
+        limits:
+          cpu: 100m
+          memory: 64Mi

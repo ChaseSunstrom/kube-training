@@ -1,0 +1,37 @@
+# Solution 09 - thumbnailer: the process needs ~150 MB but the memory limit
+# was 64Mi. When a container exceeds its memory limit the kernel's OOM killer
+# kills it (exit code 137 = 128 + SIGKILL), status OOMKilled, and the kubelet
+# restarts it -> CrashLoopBackOff.
+#
+#   kubectl apply -f modules/16-debugging/solutions/09-oomkilled.yaml
+#   kubectl -n lab-debugging rollout status deploy/thumbnailer
+#
+# In real life also ask: is the memory use legitimate, or a leak? Raising
+# the limit only helps in the first case.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: thumbnailer
+  namespace: lab-debugging
+  labels:
+    app: thumbnailer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: thumbnailer
+  template:
+    metadata:
+      labels:
+        app: thumbnailer
+    spec:
+      containers:
+        - name: worker
+          image: busybox:1.37
+          command: ["sh", "-c", "echo 'loading 150 MB model into memory...'; exec tail -c 150m /dev/zero"]
+          resources:
+            # FIX: the working set is ~150 MB but the limit was 64Mi. Give it
+            # headroom, and request close to what it really uses so the
+            # scheduler places it on a node that has that memory.
+            requests: { cpu: 10m, memory: 192Mi }
+            limits:   { cpu: 200m, memory: 256Mi }

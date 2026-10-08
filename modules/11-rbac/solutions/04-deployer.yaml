@@ -1,0 +1,52 @@
+# Solution to exercise 4: a CI "deployer" identity for ONE namespace.
+#
+# Least privilege: it may manage Deployments (and read the pods/ReplicaSets
+# they create, to watch a rollout) in lab-rbac - and nothing else: no
+# Secrets, no RBAC, no exec, no other namespaces.
+# `kubectl rollout status` needs get/watch on deployments; `kubectl apply`
+# needs get + create + patch; `kubectl scale` uses the SUBRESOURCE
+# deployments/scale, which must be granted separately.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: deployer
+  namespace: lab-rbac
+  labels:
+    app: deployer
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: deployer
+  namespace: lab-rbac
+  labels:
+    app: deployer
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments/scale"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: ["apps"]
+    resources: ["replicasets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: deployer
+  namespace: lab-rbac
+  labels:
+    app: deployer
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: deployer
+subjects:
+  - kind: ServiceAccount
+    name: deployer
+    namespace: lab-rbac

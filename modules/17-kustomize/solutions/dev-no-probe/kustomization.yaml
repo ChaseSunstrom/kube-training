@@ -1,0 +1,24 @@
+# Exercise 4 - solution: the dev overlay plus a JSON 6902 patch that REMOVES
+# the readiness probe - something a strategic-merge patch can't express
+# nicely (you would need the special "$patch: delete" directive).
+#
+# This overlay builds on top of overlays/dev - overlays can be stacked.
+#
+#   kubectl kustomize modules/17-kustomize/solutions/dev-no-probe | grep -c readinessProbe   # 0
+#   kubectl apply -k modules/17-kustomize/solutions/dev-no-probe
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../overlays/dev
+
+patches:
+  - target:
+      kind: Deployment
+      name: dev-web          # the name AFTER dev's prefix, because overlays/dev already applied it
+    patch: |-
+      - op: test             # fail the build if the object isn't what we expect
+        path: /spec/template/spec/containers/0/name
+        value: whoami
+      - op: remove
+        path: /spec/template/spec/containers/0/readinessProbe

@@ -1,0 +1,36 @@
+# 11 - The same RWO claim, from a pod on a DIFFERENT node.
+#
+# This pod stays Pending. With local-path the PV has nodeAffinity to the
+# zone-a worker, so the scheduler reports:
+#   1 node(s) didn't match PersistentVolume's node affinity
+#
+# On a cloud cluster with network block storage (EBS, Persistent Disk, Azure
+# Disk ...) the failure looks different: the pod is scheduled, but the
+# attach/detach controller refuses to attach the disk to a second node, and
+# the pod hangs in ContainerCreating with:
+#   Multi-Attach error for volume "pvc-..." Volume is already used by pod(s) rwo-a, rwo-b
+# See the README for why this bites Deployments during rolling updates.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: rwo-c
+  namespace: lab-storage
+  labels:
+    app: rwo-demo
+spec:
+  nodeSelector:
+    training/zone: zone-b        # the OTHER worker
+  containers:
+    - name: app
+      image: busybox:1.37
+      command: ["sh", "-c", "cat /data/shared.log; sleep 3600"]
+      volumeMounts:
+        - name: data
+          mountPath: /data
+      resources:
+        requests: { cpu: 10m, memory: 16Mi }
+        limits:   { cpu: 50m, memory: 32Mi }
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: shared-rwo

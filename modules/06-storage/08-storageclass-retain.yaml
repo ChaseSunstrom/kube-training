@@ -1,0 +1,34 @@
+# 08 - A custom StorageClass (cluster-scoped, hence the lab- prefix).
+#
+# A StorageClass is a template for dynamic provisioning: WHICH provisioner
+# creates volumes, with WHICH parameters, and what happens to them later.
+#
+#   reclaimPolicy: Retain
+#       When the PVC is deleted the PV is NOT deleted. It moves to "Released"
+#       and keeps the data (and keeps costing money on a cloud). It can't be
+#       re-bound until an admin removes spec.claimRef, and the backing storage
+#       must be cleaned up by hand. Use it for data you can't afford to lose
+#       to a typo in "kubectl delete". The default, Delete, removes the PV
+#       and the underlying disk/directory together with the PVC.
+#
+#   volumeBindingMode: WaitForFirstConsumer
+#       Delay provisioning until a pod is scheduled, so the volume is created
+#       where the pod can use it (right node for local storage, right zone for
+#       cloud disks). The alternative, Immediate, provisions as soon as the
+#       PVC exists - fine for network storage reachable from everywhere,
+#       wrong for node-local storage (see exercise 2).
+#
+#   allowVolumeExpansion: false
+#       local-path cannot resize volumes, so we say so explicitly. Most cloud
+#       CSI drivers support expansion and set this to true.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: lab-retain
+  labels:
+    app: storage
+provisioner: rancher.io/local-path
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: false
+# parameters: {}   # provisioner-specific; e.g. type: gp3 for the AWS EBS CSI driver

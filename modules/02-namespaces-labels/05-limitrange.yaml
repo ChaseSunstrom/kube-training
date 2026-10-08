@@ -1,0 +1,39 @@
+# 05 - LimitRange: per-container defaults and bounds inside a namespace.
+#
+# The LimitRanger admission plugin runs BEFORE the quota check:
+#   * a container without requests/limits gets `defaultRequest` / `default`
+#   * a container outside [min, max] is rejected
+#   * maxLimitRequestRatio caps how far limits may exceed requests
+# It only acts when pods are CREATED; existing pods are not changed.
+#
+# ResourceQuota (04) = how much the namespace may use IN TOTAL.
+# LimitRange   (05) = what each container gets BY DEFAULT and AT MOST.
+# Together they make "teams that forget to set resources" a non-problem.
+#
+#   kubectl apply -f modules/02-namespaces-labels/05-limitrange.yaml
+#   kubectl describe limitrange team-a-limits -n lab-namespaces-team-a
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: team-a-limits
+  namespace: lab-namespaces-team-a
+  labels:
+    app: namespaces
+spec:
+  limits:
+    - type: Container
+      defaultRequest:            # injected as resources.requests if missing
+        cpu: 25m
+        memory: 32Mi
+      default:                   # injected as resources.limits if missing
+        cpu: 100m
+        memory: 64Mi
+      min:
+        cpu: 5m
+        memory: 8Mi
+      max:                       # no single container may ask for more
+        cpu: 500m
+        memory: 256Mi
+    - type: PersistentVolumeClaim
+      max:
+        storage: 1Gi

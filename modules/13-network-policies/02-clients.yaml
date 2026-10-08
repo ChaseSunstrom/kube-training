@@ -1,0 +1,78 @@
+# 02 - Clients to test from (netshoot: curl, dig, nc, tcpdump ...).
+#
+#   lab-netpol/frontend       app=frontend   the "legitimate" client
+#   lab-netpol/intruder       app=intruder   same namespace, wrong label
+#   lab-netpol-other/frontend app=frontend   same LABEL, other namespace
+#   lab-netpol-other/intruder app=intruder   other namespace, wrong label
+#
+# Test with e.g.
+#   kubectl -n lab-netpol exec frontend -- curl -s -m 3 http://backend
+# A blocked connection doesn't get "connection refused": the packets are
+# silently DROPPED, so curl waits until -m 3 (3 s) and exits with code 28.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: frontend
+  namespace: lab-netpol
+  labels:
+    app: frontend
+spec:
+  terminationGracePeriodSeconds: 1
+  containers:
+    - name: netshoot
+      image: nicolaka/netshoot:v0.13
+      command: ["sleep", "infinity"]
+      resources:
+        requests: {cpu: 5m, memory: 16Mi}
+        limits: {cpu: 200m, memory: 64Mi}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: intruder
+  namespace: lab-netpol
+  labels:
+    app: intruder
+spec:
+  terminationGracePeriodSeconds: 1
+  containers:
+    - name: netshoot
+      image: nicolaka/netshoot:v0.13
+      command: ["sleep", "infinity"]
+      resources:
+        requests: {cpu: 5m, memory: 16Mi}
+        limits: {cpu: 200m, memory: 64Mi}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: frontend
+  namespace: lab-netpol-other
+  labels:
+    app: frontend
+spec:
+  terminationGracePeriodSeconds: 1
+  containers:
+    - name: netshoot
+      image: nicolaka/netshoot:v0.13
+      command: ["sleep", "infinity"]
+      resources:
+        requests: {cpu: 5m, memory: 16Mi}
+        limits: {cpu: 200m, memory: 64Mi}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: intruder
+  namespace: lab-netpol-other
+  labels:
+    app: intruder
+spec:
+  terminationGracePeriodSeconds: 1
+  containers:
+    - name: netshoot
+      image: nicolaka/netshoot:v0.13
+      command: ["sleep", "infinity"]
+      resources:
+        requests: {cpu: 5m, memory: 16Mi}
+        limits: {cpu: 200m, memory: 64Mi}

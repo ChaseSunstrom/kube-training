@@ -1,0 +1,26 @@
+# 06 - DYNAMIC provisioning: just ask, and a PV is created for you.
+#
+# No storageClassName -> the cluster's DEFAULT StorageClass is filled in.
+# In kind that is "standard" (rancher.io/local-path provisioner), with
+# volumeBindingMode: WaitForFirstConsumer. So right after you apply this the
+# PVC is Pending with the event:
+#   waiting for first consumer to be created before binding
+# Nothing is wrong: the provisioner waits until a pod using the claim has been
+# scheduled, then creates the volume ON THAT POD'S NODE.
+#
+# Find the default class with:  kubectl get storageclass
+# (the one marked "(default)", annotation
+#  storageclass.kubernetes.io/is-default-class: "true").
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: data
+  namespace: lab-storage
+  labels:
+    app: writer
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 200Mi

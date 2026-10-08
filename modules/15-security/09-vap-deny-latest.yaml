@@ -1,0 +1,79 @@
+# 09 - ValidatingAdmissionPolicy (GA since Kubernetes 1.30): your own admission
+#      rules, written in CEL, evaluated in-process by the API server.
+#      No webhook server to deploy, no TLS certificates, no extra latency.
+#
+#   kubectl apply -f modules/15-security/09-vap-deny-latest.yaml
+#   kubectl apply -f modules/15-security/vap/01-latest-tag-pod.yaml          # denied
+#   kubectl apply -f modules/15-security/vap/02-untagged-deployment.yaml     # denied
+#
+# Rule: every container image must carry an explicit tag (not :latest) or a digest.
+#
+# Two objects, both CLUSTER-scoped:
+#   ValidatingAdmissionPolicy         WHAT to check (match rules + CEL)
+#   ValidatingAdmissionPolicyBinding  WHERE to apply it and WHAT TO DO on failure
+# The binding below only selects the lab-security namespace, so this lab can't
+# affect anything else in your cluster. Both are named lab-* so they are easy to
+# find and delete: kubectl delete validatingadmissionpolicy,validatingadmissionpolicybinding lab-security-deny-latest-tag
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: lab-security-deny-latest-tag
+spec:
+  failurePolicy: Fail          # if the CEL itself errors (e.g. a bug), reject. Use Ignore
+                               # only for policies that must never block the cluster.
+  matchConstraints:
+    resourceRules:
+      # Pods ...
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["pods"]
+      # ... and the workload objects that create pods. Checking these too gives
+      # the user an error at `kubectl apply` time instead of a Deployment that
+      # silently fails to create pods (compare psa/03-noncompliant-deployment.yaml).
+      - apiGroups: ["apps"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["deployments", "replicasets", "statefulsets", "daemonsets"]
+      - apiGroups: ["batch"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["jobs"]
+  variables:
+    # Find the pod spec wherever it lives in the object.
+    - name: podSpec
+      expression: "object.kind == 'Pod' ? object.spec : object.spec.template.spec"
+    - name: containers
+      expression: >-
+        variables.podSpec.containers +
+        (has(variables.podSpec.initContainers) ? variables.podSpec.initContainers : [])
+    # An image is OK if it has a digest, or a tag (a ':' after the last '/',
+    # so a registry port like "myreg:5000/app" doesn't count) that isn't "latest".
+    - name: badImages
+      expression: >-
+        variables.containers.filter(c,
+          !c.image.contains('@sha256:') &&
+          (
+            !c.image.substring(c.image.lastIndexOf('/') + 1).contains(':') ||
+            c.image.endsWith(':latest')
+          )
+        ).map(c, c.name + '=' + c.image)
+  validations:
+    - expression: "size(variables.badImages) == 0"
+      messageExpression: >-
+        'images must be pinned to a version tag (not :latest) or a digest; offending containers: '
+        + variables.badImages.join(', ')
+      reason: Invalid
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: lab-security-deny-latest-tag
+spec:
+  policyName: lab-security-deny-latest-tag
+  validationActions: ["Deny"]   # or ["Warn", "Audit"] to roll a new policy out safely:
+                                # users see warnings, nothing breaks, you watch the audit log
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: lab-security   # label the API server sets on every namespace

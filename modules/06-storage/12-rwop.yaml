@@ -1,0 +1,73 @@
+# 12 - ReadWriteOncePod (RWOP): exactly ONE pod in the whole cluster.
+#
+# RWOP (GA since Kubernetes 1.29) is enforced by the scheduler: while one pod
+# uses the claim, any other pod that references it is unschedulable - even
+# on the same node:
+#   node has pod using PersistentVolumeClaim with the same name and
+#   ReadWriteOncePod access mode
+# It's meant for workloads that must never have two writers (e.g. a
+# single-instance database). Support depends on the volume plugin: most CSI
+# drivers and kind's local-path provisioner handle it.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: single-writer
+  namespace: lab-storage
+  labels:
+    app: rwop-demo
+spec:
+  accessModes:
+    - ReadWriteOncePod
+  resources:
+    requests:
+      storage: 100Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: rwop-a
+  namespace: lab-storage
+  labels:
+    app: rwop-demo
+spec:
+  nodeSelector:
+    training/zone: zone-a
+  containers:
+    - name: app
+      image: busybox:1.37
+      command: ["sh", "-c", "trap 'exit 0' TERM; sleep 3600 & wait $!"]
+      volumeMounts:
+        - name: data
+          mountPath: /data
+      resources:
+        requests: { cpu: 10m, memory: 16Mi }
+        limits:   { cpu: 50m, memory: 32Mi }
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: single-writer
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: rwop-b
+  namespace: lab-storage
+  labels:
+    app: rwop-demo
+spec:
+  nodeSelector:
+    training/zone: zone-a        # same node - still refused
+  containers:
+    - name: app
+      image: busybox:1.37
+      command: ["sh", "-c", "trap 'exit 0' TERM; sleep 3600 & wait $!"]
+      volumeMounts:
+        - name: data
+          mountPath: /data
+      resources:
+        requests: { cpu: 10m, memory: 16Mi }
+        limits:   { cpu: 50m, memory: 32Mi }
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: single-writer

@@ -1,0 +1,45 @@
+# Exercise 6 - solution: an emptyDir that grows past its sizeLimit.
+#
+# The kubelet measures emptyDir usage periodically. Once usage exceeds
+# sizeLimit it EVICTS the whole pod (phase Failed, reason Evicted) - a
+# different mechanism from OOMKilled: nothing is killed by the kernel, the
+# kubelet stops the pod on purpose. A bare pod stays evicted;
+# a Deployment would create a replacement.
+#
+#   kubectl apply -f modules/01-pods/solutions/emptydir-sizelimit.yaml
+#   kubectl get pod disk-hog -n lab-pods -w        # Running -> Error, usually within a minute
+#   kubectl get pod disk-hog -n lab-pods -o jsonpath='{.status.phase} {.status.reason}: {.status.message}{"\n"}'
+#   -> Failed Evicted: Usage of EmptyDir volume "scratch" exceeds the limit "10Mi".
+#   kubectl get events -n lab-pods --field-selector involvedObject.name=disk-hog
+#
+# The check runs on the kubelet's housekeeping interval, so it takes a few
+# seconds to a minute. `exec sleep` (no SIGTERM handler) keeps the container
+# from exiting 0 on its own, so the pod clearly ends up Failed/Evicted.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: disk-hog
+  namespace: lab-pods
+  labels:
+    app: disk-hog
+spec:
+  containers:
+    - name: hog
+      image: busybox:1.37
+      command:
+        - sh
+        - -c
+        - |
+          dd if=/dev/zero of=/scratch/big bs=1M count=20   # 20 MiB into a 10 MiB volume
+          echo "wrote 20 MiB"; ls -lh /scratch
+          exec sleep 3600
+      volumeMounts:
+        - name: scratch
+          mountPath: /scratch
+      resources:
+        requests: { cpu: 5m, memory: 8Mi }
+        limits: { cpu: 50m, memory: 32Mi }
+  volumes:
+    - name: scratch
+      emptyDir:
+        sizeLimit: 10Mi

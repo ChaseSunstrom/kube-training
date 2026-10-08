@@ -1,0 +1,28 @@
+# 01 - The headless "governing" Service for the web StatefulSet.
+#
+# clusterIP: None means "no virtual IP, no load balancing by kube-proxy".
+# Instead CoreDNS publishes one A record PER READY POD:
+#
+#   web.lab-statefulsets.svc.cluster.local        -> all ready pod IPs
+#   web-0.web.lab-statefulsets.svc.cluster.local  -> just web-0
+#   web-1.web.lab-statefulsets.svc.cluster.local  -> just web-1
+#
+# The per-pod names exist because the StatefulSet sets each pod's
+# spec.hostname (web-0 ...) and spec.subdomain (= serviceName, "web").
+# This Service must exist and its name must match the StatefulSet's
+# serviceName, otherwise the pods run fine but have no stable DNS names.
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  namespace: lab-statefulsets
+  labels:
+    app: web
+spec:
+  clusterIP: None
+  selector:
+    app: web
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

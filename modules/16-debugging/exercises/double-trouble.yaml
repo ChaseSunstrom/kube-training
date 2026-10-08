@@ -1,0 +1,56 @@
+# Exercise - "double trouble": a checkout service with TWO independent bugs.
+# Fixing the first one reveals the second - very common in real life.
+#
+#   kubectl apply -f modules/16-debugging/exercises/double-trouble.yaml
+#
+# Goal: `kubectl -n lab-debugging get pods -l app=checkout` shows 1/1 Running
+# with RESTARTS staying at 0 for at least two minutes.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: checkout-secret
+  namespace: lab-debugging
+  labels:
+    app: checkout
+type: Opaque
+stringData:
+  api-key: demo-key-123
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: checkout
+  namespace: lab-debugging
+  labels:
+    app: checkout
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: checkout
+  template:
+    metadata:
+      labels:
+        app: checkout
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          env:
+            - name: API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: checkout-secrets
+                  key: api-key
+          ports:
+            - name: http
+              containerPort: 80
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+            failureThreshold: 2
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 100m, memory: 64Mi }

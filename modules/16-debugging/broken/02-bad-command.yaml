@@ -1,0 +1,36 @@
+# Broken app 02 - "report-worker"
+#
+#   kubectl apply -f modules/16-debugging/broken/02-bad-command.yaml
+#
+# Ticket: "report-worker keeps restarting and `kubectl logs` shows nothing."
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: report-worker
+  namespace: lab-debugging
+  labels:
+    app: report-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: report-worker
+  template:
+    metadata:
+      labels:
+        app: report-worker
+    spec:
+      containers:
+        - name: worker
+          image: busybox:1.37
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              echo "report-worker started"
+              while true; do
+                echo "$(date -Iseconds) generating report"
+                sleep 10
+              done
+          resources:
+            requests: { cpu: 5m, memory: 8Mi }
+            limits:   { cpu: 20m, memory: 16Mi }

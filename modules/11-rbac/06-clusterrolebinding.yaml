@@ -1,0 +1,36 @@
+# 06 - ClusterRoleBinding: cluster-wide permissions.
+#
+# Nodes, PersistentVolumes, Namespaces, StorageClasses, ClusterRoles... are
+# CLUSTER-SCOPED: they don't live in any namespace, so a RoleBinding can never
+# grant access to them. You need a ClusterRoleBinding.
+#
+# A ClusterRoleBinding also grants its rules for namespaced resources in ALL
+# namespaces. That's why it's the most dangerous object in RBAC - bind as
+# little as possible this way (least privilege).
+#
+# Here: node-watcher may get/list/watch nodes, nothing else.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: lab-rbac-node-reader
+  labels:
+    app: lab-rbac
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: lab-rbac-node-watcher          # cluster-scoped -> lab- prefix
+  labels:
+    app: lab-rbac
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: lab-rbac-node-reader
+subjects:
+  - kind: ServiceAccount
+    name: node-watcher
+    namespace: lab-rbac

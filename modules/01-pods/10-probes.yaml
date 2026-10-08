@@ -1,0 +1,61 @@
+# 10 - Startup, liveness and readiness probes on a healthy app.
+#
+#   probe      question it answers              on failure the kubelet...
+#   startup    "has the app finished starting?"  ...kills + restarts it (after failureThreshold)
+#              (liveness/readiness are paused until it succeeds once)
+#   liveness   "is it stuck / dead?"             ...kills + restarts the container
+#   readiness  "can it take traffic right now?"  ...marks the pod NotReady; NO restart.
+#                                                  Services stop sending it traffic.
+#
+# Probe types: httpGet (2xx/3xx = success), tcpSocket (port accepts a
+# connection), exec (exit code 0), grpc.
+#
+#   kubectl apply -f modules/01-pods/10-probes.yaml
+#   kubectl get pod probes-demo -n lab-pods -w
+#   # make READINESS fail (index.html disappears -> HTTP 404):
+#   kubectl exec probes-demo -n lab-pods -- rm /usr/share/nginx/html/index.html
+#   #   READY goes 1/1 -> 0/1, RESTARTS stays 0: liveness (tcpSocket) is still happy
+#   kubectl exec probes-demo -n lab-pods -- sh -c 'echo back > /usr/share/nginx/html/index.html'
+#   #   READY goes back to 1/1
+apiVersion: v1
+kind: Pod
+metadata:
+  name: probes-demo
+  namespace: lab-pods
+  labels:
+    app: probes-demo
+spec:
+  containers:
+    - name: nginx
+      image: nginx:1.27-alpine
+      ports:
+        - name: http
+          containerPort: 80
+      # Startup: allow up to 30 x 2s = 60s to come up before liveness kicks in.
+      # Use it for slow starters instead of a huge liveness initialDelaySeconds.
+      startupProbe:
+        httpGet:
+          path: /
+          port: http            # named port, see `ports` above
+        periodSeconds: 2
+        failureThreshold: 30
+      # Liveness: deliberately CHEAP and about the process only. Never make
+      # liveness depend on a database or another service - if that dependency
+      # goes down, every replica restarts at once and makes things worse.
+      livenessProbe:
+        tcpSocket:
+          port: http
+        periodSeconds: 10
+        failureThreshold: 3     # 3 consecutive failures = restart
+        timeoutSeconds: 1
+      # Readiness: "should I get traffic?" - may check more (here: the page exists).
+      readinessProbe:
+        httpGet:
+          path: /index.html
+          port: http
+        periodSeconds: 3
+        failureThreshold: 1     # out of rotation after one failure...
+        successThreshold: 1     # ...and back after one success
+      resources:
+        requests: { cpu: 10m, memory: 16Mi }
+        limits: { cpu: 100m, memory: 64Mi }

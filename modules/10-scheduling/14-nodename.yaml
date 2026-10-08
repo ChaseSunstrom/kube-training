@@ -1,0 +1,30 @@
+# 14 - Manual scheduling with spec.nodeName (and why you should avoid it).
+#
+# Setting nodeName skips the scheduler entirely: the pod is "already bound",
+# and the kubelet on that node just starts it. Consequences:
+#   * Scheduler filters don't run: NoSchedule taints, affinity, topology
+#     spread, priority/preemption - all ignored. This pod runs on the
+#     control-plane even though it does NOT tolerate its NoSchedule taint.
+#     (The kubelet does reject pods that don't tolerate NoExecute taints.)
+#   * Resources are only checked by the kubelet. If they don't fit the pod
+#     fails with OutOfcpu / OutOfmemory instead of waiting as Pending.
+#   * If the node doesn't exist the pod is never started (and is eventually
+#     garbage-collected); if the node dies, nothing reschedules the pod.
+#   * Node names are cattle - they change whenever nodes are replaced.
+# Use nodeSelector / node affinity on a label instead. nodeName is really
+# only for debugging and for tools that implement their own scheduling.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: manual
+  namespace: lab-scheduling
+  labels:
+    app: manual
+spec:
+  nodeName: kube-training-control-plane
+  containers:
+    - name: app
+      image: traefik/whoami:v1.10
+      resources:
+        requests: {cpu: 10m, memory: 16Mi}
+        limits: {cpu: 50m, memory: 32Mi}

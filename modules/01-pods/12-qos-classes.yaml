@@ -1,0 +1,71 @@
+# 12 - Resource requests/limits and the three QoS classes.
+#
+# requests: what the SCHEDULER reserves on a node. A pod only lands on a node
+#           whose allocatable minus already-requested capacity fits it.
+#           CPU requests also set the container's relative CPU share.
+# limits:   what the KERNEL enforces at runtime.
+#           CPU over limit  -> throttled (slowed down), never killed.
+#           Memory over limit -> the container is OOM-killed (see 13-oomkilled.yaml).
+#
+# Units: cpu "100m" = 0.1 core; memory "64Mi" = 64 * 2^20 bytes ("64M" = 64 * 10^6!).
+#
+# From requests/limits Kubernetes derives a QoS class, which decides who is
+# evicted first when a NODE runs out of memory:
+#   Guaranteed  every container has cpu+memory limits, and requests == limits  (evicted last)
+#   Burstable   at least one request or limit set, but not Guaranteed
+#   BestEffort  no requests or limits at all                                   (evicted first)
+#
+#   kubectl apply -f modules/01-pods/12-qos-classes.yaml
+#   kubectl get pods -n lab-pods -l app=qos-demo \
+#     -o custom-columns=NAME:.metadata.name,QOS:.status.qosClass
+#   kubectl get pod qos-guaranteed -n lab-pods -o jsonpath='{.status.qosClass}{"\n"}'
+apiVersion: v1
+kind: Pod
+metadata:
+  name: qos-guaranteed
+  namespace: lab-pods
+  labels:
+    app: qos-demo
+spec:
+  containers:
+    - name: app
+      image: busybox:1.37
+      command: ["sh", "-c", "trap 'exit 0' TERM; sleep infinity & wait"]
+      resources:
+        # requests == limits for BOTH cpu and memory. (If you set only limits,
+        # Kubernetes copies them into requests - also Guaranteed.)
+        requests: { cpu: 50m, memory: 32Mi }
+        limits: { cpu: 50m, memory: 32Mi }
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: qos-burstable
+  namespace: lab-pods
+  labels:
+    app: qos-demo
+spec:
+  containers:
+    - name: app
+      image: busybox:1.37
+      command: ["sh", "-c", "trap 'exit 0' TERM; sleep infinity & wait"]
+      resources:
+        # Can burst above its request up to the limit when the node has spare capacity.
+        requests: { cpu: 10m, memory: 16Mi }
+        limits: { cpu: 100m, memory: 64Mi }
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: qos-besteffort
+  namespace: lab-pods
+  labels:
+    app: qos-demo
+spec:
+  containers:
+    - name: app
+      image: busybox:1.37
+      command: ["sh", "-c", "trap 'exit 0' TERM; sleep infinity & wait"]
+      # Deliberately NO resources (the only container in this repo without them):
+      # the scheduler reserves nothing, it may use whatever is free, and it is
+      # the first to be evicted under node memory pressure.

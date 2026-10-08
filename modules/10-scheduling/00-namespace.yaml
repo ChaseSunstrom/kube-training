@@ -1,0 +1,12 @@
+# Module 10 - Scheduling
+#
+# Every object in this module lives in the lab-scheduling namespace, so
+# cleanup is `kubectl delete namespace lab-scheduling` (plus the two
+# cluster-scoped PriorityClasses and any node taint/label you added - see the
+# README's Cleanup section).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-scheduling
+  labels:
+    app: lab-scheduling

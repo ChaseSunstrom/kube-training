@@ -1,0 +1,35 @@
+# VAP demo 2 - EXPECTED TO BE DENIED by lab-security-deny-latest-tag (09).
+#
+#   kubectl apply -f modules/15-security/vap/02-untagged-deployment.yaml
+#
+# No tag at all is the same as ":latest". Because the policy also matches
+# Deployments, the error appears right at `kubectl apply` - the Deployment is
+# never stored (unlike PSA, which only blocks the pods later).
+# Note the init container: the policy checks those too.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: untagged
+  namespace: lab-security
+  labels:
+    app: untagged
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: untagged
+  template:
+    metadata:
+      labels:
+        app: untagged
+    spec:
+      initContainers:
+        - name: init
+          image: busybox            # <- no tag
+          command: ["true"]
+      containers:
+        - name: web
+          image: nginx:1.27-alpine  # <- fine
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 100m, memory: 64Mi }

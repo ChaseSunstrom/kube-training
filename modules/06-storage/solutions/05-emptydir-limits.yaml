@@ -1,0 +1,52 @@
+# Solution to exercise 5 - what happens when an emptyDir is over its sizeLimit.
+#
+#   kubectl apply -f solutions/05-emptydir-limits.yaml
+#   kubectl logs -n lab-storage emptydir-limits          # tmpfs result
+#   kubectl get pod emptydir-limits -n lab-storage -w    # wait for eviction
+#   kubectl get pod emptydir-limits -n lab-storage -o jsonpath='{.status.message}'
+#
+# Observed on this cluster:
+#   * /mem (medium: Memory, sizeLimit 16Mi) is a 16M tmpfs, so writing 20M
+#     fails immediately: "No space left on device". The pod keeps running.
+#   * /disk (disk-backed, sizeLimit 50Mi) accepts all 60M - nothing stops the
+#     write - but some seconds later the kubelet's eviction manager notices
+#     and EVICTS the pod:
+#       Usage of EmptyDir volume "disk" exceeds the limit "50Mi".
+#     A bare pod that is evicted is not recreated; a Deployment would replace it.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: emptydir-limits
+  namespace: lab-storage
+  labels:
+    app: emptydir-limits
+spec:
+  containers:
+    - name: app
+      image: busybox:1.37
+      command:
+        - sh
+        - -c
+        - |
+          df -h /mem /disk
+          echo "--- 20M into the 16Mi tmpfs:"
+          dd if=/dev/zero of=/mem/blob bs=1M count=20 2>&1
+          echo "--- 60M into the 50Mi disk emptyDir:"
+          dd if=/dev/zero of=/disk/blob bs=1M count=60 2>&1
+          sleep 3600
+      volumeMounts:
+        - name: mem
+          mountPath: /mem
+        - name: disk
+          mountPath: /disk
+      resources:
+        requests: { cpu: 10m, memory: 32Mi }
+        limits:   { cpu: 100m, memory: 64Mi }   # the 16M tmpfs counts against this
+  volumes:
+    - name: mem
+      emptyDir:
+        medium: Memory
+        sizeLimit: 16Mi
+    - name: disk
+      emptyDir:
+        sizeLimit: 50Mi

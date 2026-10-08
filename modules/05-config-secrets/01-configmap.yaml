@@ -1,0 +1,30 @@
+# 01 - A ConfigMap written as YAML.
+#
+# A ConfigMap is just a bag of key -> string values stored in the API server
+# (and therefore in etcd). It holds NON-secret configuration. Two styles of key
+# live happily side by side:
+#
+#   * "env-style" keys (APP_COLOR, APP_MODE ...) that you inject as
+#     environment variables, and
+#   * "file-style" keys (app.properties) whose value is a whole file; you
+#     usually mount those into the container as files.
+#
+# Limits worth knowing: the whole object must be < 1 MiB, and values are
+# always strings (quote numbers and booleans, or the API rejects them).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: lab-config
+  labels:
+    app: config-demo
+data:
+  # env-style keys
+  APP_COLOR: blue
+  APP_MODE: production
+  LOG_LEVEL: "info"          # quoted on purpose: values must be strings
+  # file-style key: the value is a multi-line file (YAML block scalar "|")
+  app.properties: |
+    greeting=hello
+    max.connections=10
+    feature.dark-mode=false

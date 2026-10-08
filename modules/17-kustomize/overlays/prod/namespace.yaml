@@ -1,0 +1,7 @@
+# The prod namespace (see overlays/dev/namespace.yaml for why it is here).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-kustomize-prod
+  labels:
+    app: kustomize

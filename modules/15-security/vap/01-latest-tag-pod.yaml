@@ -1,0 +1,21 @@
+# VAP demo 1 - EXPECTED TO BE DENIED by lab-security-deny-latest-tag (09).
+#
+#   kubectl apply -f modules/15-security/vap/01-latest-tag-pod.yaml
+#
+# ":latest" means "whatever the registry has right now" - two nodes can run
+# two different images for the same pod spec, and a rollback can't go back.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: latest-tag
+  namespace: lab-security
+  labels:
+    app: latest-tag
+spec:
+  containers:
+    - name: app
+      image: busybox:latest
+      command: ["sh", "-c", "sleep 86400"]
+      resources:
+        requests: { cpu: 10m, memory: 16Mi }
+        limits:   { cpu: 50m, memory: 32Mi }

@@ -1,0 +1,12 @@
+# Module 06 - Storage
+#
+# Namespaced objects (pods, PVCs) live in lab-storage. This module ALSO
+# creates cluster-scoped objects - PersistentVolumes and a StorageClass - all
+# prefixed "lab-". Deleting the namespace does NOT delete those; the README's
+# Cleanup section lists them.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-storage
+  labels:
+    app: storage

@@ -1,0 +1,33 @@
+# Exercise 2 - solution.
+#
+# `kubectl describe pod broken-probe -n lab-pods` shows:
+#   Warning  Unhealthy  ...  Readiness probe failed: Get "http://10.244.x.y:8080/":
+#            dial tcp 10.244.x.y:8080: connect: connection refused
+# The app listens on 5678 (-listen=:5678) but the probe checks 8080.
+# Fix: probe the named port `http`, so probe and container can never drift apart.
+#
+#   kubectl replace --force -f modules/01-pods/solutions/broken-probe.yaml
+#   kubectl get pod broken-probe -n lab-pods     # READY 1/1
+apiVersion: v1
+kind: Pod
+metadata:
+  name: broken-probe
+  namespace: lab-pods
+  labels:
+    app: broken-probe
+spec:
+  containers:
+    - name: echo
+      image: hashicorp/http-echo:1.0
+      args: ["-listen=:5678", "-text=ready?"]
+      ports:
+        - name: http
+          containerPort: 5678
+      readinessProbe:
+        httpGet:
+          path: /
+          port: http          # was 8080
+        periodSeconds: 3
+      resources:
+        requests: { cpu: 5m, memory: 8Mi }
+        limits: { cpu: 50m, memory: 16Mi }

@@ -1,0 +1,32 @@
+# 12 - Preemption, part 2: a HIGH-priority pod that doesn't fit.
+#
+# Both widgets are taken by low-prio pods (11). This pod needs one, and its
+# priority (lab-high = 100000) is higher than theirs (lab-low = 1000), so the
+# scheduler:
+#   1. finds that no node fits ("Insufficient training.example.com/widget"),
+#   2. simulates removing lower-priority pods node by node and picks the
+#      cheapest set of victims (lowest priority, fewest pods, respecting
+#      PodDisruptionBudgets on a best-effort basis),
+#   3. deletes the victim (event "Preempted"), records the node in this pod's
+#      status.nominatedNodeName, and schedules it once the space is free.
+# The victim's Deployment immediately creates a replacement low-prio pod,
+# which now stays Pending: low-priority pods cannot preempt high ones.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: high-prio
+  namespace: lab-scheduling
+  labels:
+    app: high-prio
+spec:
+  priorityClassName: lab-high
+  terminationGracePeriodSeconds: 5
+  containers:
+    - name: app
+      image: traefik/whoami:v1.10
+      resources:
+        requests: {cpu: 10m, memory: 16Mi}
+        limits:
+          cpu: 50m
+          memory: 32Mi
+          training.example.com/widget: "1"

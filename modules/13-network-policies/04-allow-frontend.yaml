@@ -1,0 +1,33 @@
+# 04 - Allow app=frontend pods (of THIS namespace) to reach backend on port 80.
+#
+# Read it as: "pods matching spec.podSelector (backend) accept ingress
+# FROM pods matching from[].podSelector (frontend) ON ports[]".
+#
+# * A podSelector inside "from" without a namespaceSelector only matches pods
+#   in the policy's OWN namespace - lab-netpol-other/frontend has the same
+#   label but is still blocked.
+# * "ports" refers to the port on the POD (containerPort / targetPort), not
+#   the Service port. Named ports ("http") are resolved per pod. Port 8080
+#   (admin) is not listed, so it stays closed even for frontend.
+#   (endPort lets you allow a range: port: 32000, endPort: 32768.)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend-allow-frontend
+  namespace: lab-netpol
+  labels:
+    app: backend
+spec:
+  podSelector:
+    matchLabels:
+      app: backend
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: frontend
+      ports:
+        - protocol: TCP
+          port: http          # named port = 80 on the backend pod

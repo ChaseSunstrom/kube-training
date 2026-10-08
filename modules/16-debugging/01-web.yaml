@@ -1,0 +1,66 @@
+# 01 - A healthy app to practise the debugging toolkit on.
+#
+#   kubectl apply -f modules/16-debugging/01-web.yaml
+#
+# Two containers per pod, so you have to pick one with -c for logs/exec:
+#   nginx      the web server (its access log goes to stdout)
+#   heartbeat  prints a timestamped line every 5 s - handy for logs -f / --since
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: lab-debugging
+  labels:
+    app: web
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          ports:
+            - name: http
+              containerPort: 80
+          readinessProbe:
+            httpGet: { path: /, port: http }
+            periodSeconds: 5
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 100m, memory: 64Mi }
+        - name: heartbeat
+          image: busybox:1.37
+          command:
+            - sh
+            - -c
+            - |
+              i=0
+              while true; do
+                i=$((i+1))
+                echo "$(date -Iseconds) heartbeat #$i from $HOSTNAME"
+                sleep 5
+              done
+          resources:
+            requests: { cpu: 5m, memory: 8Mi }
+            limits:   { cpu: 20m, memory: 16Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  namespace: lab-debugging
+  labels:
+    app: web
+spec:
+  selector:
+    app: web
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

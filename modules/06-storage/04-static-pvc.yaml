@@ -1,0 +1,32 @@
+# 04 - STATIC provisioning, part 2: a PersistentVolumeClaim that binds to it.
+#
+# A PVC is a namespaced REQUEST for storage: "I need >= 500Mi, ReadWriteOnce".
+# The PV controller looks for an existing PV that satisfies it.
+#
+# storageClassName: ""   is essential. If you OMIT storageClassName, the
+#                        DefaultStorageClass admission plugin fills in the
+#                        default class ("standard") and a brand-new volume is
+#                        dynamically provisioned instead of using our PV.
+# selector               narrows the candidates to PVs with matching labels.
+#                        (Alternative: spec.volumeName: lab-static-pv to
+#                        pre-bind to one specific PV.)
+#
+# Binding is 1:1 and exclusive. This claim asks for 500Mi but will get the
+# whole 1Gi PV - a PV is never split between claims.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: static-claim
+  namespace: lab-storage
+  labels:
+    app: static-demo
+spec:
+  storageClassName: ""
+  selector:
+    matchLabels:
+      app: static-demo
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 500Mi

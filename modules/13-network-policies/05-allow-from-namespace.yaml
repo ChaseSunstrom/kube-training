@@ -1,0 +1,28 @@
+# 05 - Allow EVERY pod of another namespace (lab-netpol-other) to reach
+# backend on port 80.
+#
+# namespaceSelector matches namespace LABELS. kubernetes.io/metadata.name is
+# set automatically on every namespace, so this selects exactly one namespace
+# by name. (matchExpressions with operator In and several names selects
+# several.) An empty namespaceSelector {} would mean "all namespaces".
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend-allow-other-namespace
+  namespace: lab-netpol
+  labels:
+    app: backend
+spec:
+  podSelector:
+    matchLabels:
+      app: backend
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: lab-netpol-other
+      ports:
+        - protocol: TCP
+          port: 80

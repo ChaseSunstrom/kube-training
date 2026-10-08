@@ -1,0 +1,33 @@
+# Broken app 09 - "thumbnailer"
+#
+#   kubectl apply -f modules/16-debugging/broken/09-oomkilled.yaml
+#
+# Ticket: "thumbnailer restarts every few seconds. The logs just say it is
+# loading its model and then nothing."
+#
+# (The container simulates loading a 150 MB model into memory: busybox's
+# `tail -c 150m` keeps the last 150 MB of an endless stream in RAM.)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: thumbnailer
+  namespace: lab-debugging
+  labels:
+    app: thumbnailer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: thumbnailer
+  template:
+    metadata:
+      labels:
+        app: thumbnailer
+    spec:
+      containers:
+        - name: worker
+          image: busybox:1.37
+          command: ["sh", "-c", "echo 'loading 150 MB model into memory...'; exec tail -c 150m /dev/zero"]
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits:   { cpu: 200m, memory: 64Mi }

@@ -1,0 +1,27 @@
+# Exercise 6, part 2 - create this AS pod-creator:
+#   kubectl create -f modules/11-rbac/solutions/06-sneaky-pod.yaml \
+#     --as=system:serviceaccount:lab-rbac:pod-creator
+#
+# pod-creator can't list nodes. But it may create pods, and a pod may run as
+# ANY ServiceAccount in its namespace - nobody checks whether the creator is
+# allowed to "use" that ServiceAccount. So this pod runs as node-watcher and
+# lists nodes for it. Lesson: "create pods" in a namespace is (at least) every
+# permission of every ServiceAccount in that namespace. Keep powerful
+# ServiceAccounts in namespaces where few people can create pods.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sneaky
+  namespace: lab-rbac
+  labels:
+    app: sneaky
+spec:
+  serviceAccountName: node-watcher
+  restartPolicy: Never
+  containers:
+    - name: kubectl
+      image: rancher/kubectl:v1.36.2
+      args: ["get", "nodes"]
+      resources:
+        requests: {cpu: 10m, memory: 32Mi}
+        limits: {cpu: 200m, memory: 128Mi}

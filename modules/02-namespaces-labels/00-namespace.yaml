@@ -1,0 +1,37 @@
+# 00 - The namespaces for module 02.
+#
+# This module is about namespaces, so it owns three of them (one file,
+# because they belong together):
+#   lab-namespaces          labels/selectors/annotations demos
+#   lab-namespaces-team-a   a "team" namespace with a ResourceQuota + LimitRange
+#   lab-namespaces-team-b   a second team namespace with no limits, for contrast
+#
+# All three carry app=namespaces, so cleanup can be done by label:
+#   kubectl delete namespace -l app=namespaces
+#
+#   kubectl apply -f modules/02-namespaces-labels/00-namespace.yaml
+#   kubectl get namespaces -l app=namespaces --show-labels
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-namespaces
+  labels:
+    app: namespaces
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-namespaces-team-a
+  labels:
+    app: namespaces
+    team: a              # namespaces are objects too: they can be labelled and selected
+    env: dev
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-namespaces-team-b
+  labels:
+    app: namespaces
+    team: b
+    env: prod

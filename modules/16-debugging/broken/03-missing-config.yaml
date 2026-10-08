@@ -1,0 +1,55 @@
+# Broken app 03 - "billing-api"
+#
+#   kubectl apply -f modules/16-debugging/broken/03-missing-config.yaml
+#
+# Ticket: "billing-api is stuck and never even starts its container."
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: billing-config
+  namespace: lab-debugging
+  labels:
+    app: billing-api
+data:
+  LOG_LEVEL: info
+  CURRENCY: EUR
+  PAYMENT_GATEWAY_URL: http://payments.example.internal
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: billing-api
+  namespace: lab-debugging
+  labels:
+    app: billing-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: billing-api
+  template:
+    metadata:
+      labels:
+        app: billing-api
+    spec:
+      containers:
+        - name: api
+          image: hashicorp/http-echo:1.0
+          args: ["-listen=:5678", "-text=billing-api ok"]
+          env:
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: billing-config
+                  key: LOG_LEVEL
+            - name: GATEWAY_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: billing-config
+                  key: PAYMENT_GATEWAY
+          ports:
+            - name: http
+              containerPort: 5678
+          resources:
+            requests: { cpu: 5m, memory: 8Mi }
+            limits:   { cpu: 50m, memory: 32Mi }

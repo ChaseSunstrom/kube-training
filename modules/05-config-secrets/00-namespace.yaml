@@ -1,0 +1,10 @@
+# Module 05 - ConfigMaps & Secrets
+#
+# Every object in this module lives in the lab-config namespace, so cleanup is
+# a single command:   kubectl delete namespace lab-config
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-config
+  labels:
+    app: config-secrets

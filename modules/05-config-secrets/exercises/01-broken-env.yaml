@@ -1,0 +1,28 @@
+# Exercise 1 - this pod never starts. Why?
+#
+#   kubectl apply -f exercises/01-broken-env.yaml
+#   kubectl get pod broken-env -n lab-config      # STATUS?
+#   kubectl describe pod broken-env -n lab-config # read the Events
+#
+# Fix it in two different ways (one of them needs only one extra line).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: broken-env
+  namespace: lab-config
+  labels:
+    app: broken-env
+spec:
+  containers:
+    - name: app
+      image: busybox:1.37
+      command: ["sh", "-c", "echo colour is $COLOUR; sleep 3600"]
+      env:
+        - name: COLOUR
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: APP_COLOUR        # <- British spelling
+      resources:
+        requests: { cpu: 10m, memory: 16Mi }
+        limits:   { cpu: 50m, memory: 32Mi }

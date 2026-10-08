@@ -1,0 +1,22 @@
+# 08 - The "dependency" that init-demo (07) is waiting for.
+#
+# A Service gets a DNS name <service>.<namespace>.svc.cluster.local as soon as
+# it exists - even with no pods behind it - which is all the init container
+# checks. (Services are module 04. Note that "the name resolves" does not
+# mean "the database is ready": a real check would try to connect.)
+#
+#   kubectl apply -f modules/01-pods/08-init-dependency-service.yaml
+#   kubectl get pod init-demo -n lab-pods -w      # Init:1/2 -> PodInitializing -> Running
+apiVersion: v1
+kind: Service
+metadata:
+  name: init-demo-db
+  namespace: lab-pods
+  labels:
+    app: init-demo
+spec:
+  selector:
+    app: init-demo-db      # no pod has this label; that is fine for this demo
+  ports:
+    - port: 5432
+      targetPort: 5432

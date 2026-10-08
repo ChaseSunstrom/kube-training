@@ -1,0 +1,24 @@
+# VAP demo 3 - EXPECTED TO BE DENIED by lab-security-require-resources (10).
+#
+#   kubectl apply -f modules/15-security/vap/03-no-limits-pod.yaml
+#
+# The "app" container is fine; "sidecar" forgot its resources entirely.
+# The messageExpression in the policy names the offender.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: no-limits
+  namespace: lab-security
+  labels:
+    app: no-limits
+spec:
+  containers:
+    - name: app
+      image: busybox:1.37
+      command: ["sh", "-c", "sleep 86400"]
+      resources:
+        requests: { cpu: 10m, memory: 16Mi }
+        limits:   { memory: 32Mi }
+    - name: sidecar
+      image: busybox:1.37
+      command: ["sh", "-c", "sleep 86400"]

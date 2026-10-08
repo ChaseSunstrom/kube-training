@@ -1,0 +1,60 @@
+# 01 - The server we protect: "backend" in lab-netpol.
+#
+# One pod, TWO ports, so we can show port-level rules:
+#   80    whoami "http"   - the port clients are supposed to use
+#   8080  whoami "admin"  - pretend admin endpoint nobody should reach
+# The Service exposes both.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: lab-netpol
+  labels:
+    app: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+        - name: http
+          image: traefik/whoami:v1.10
+          args: ["--port", "80", "--name", "backend-http"]
+          ports:
+            - name: http
+              containerPort: 80
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 100m, memory: 32Mi}
+        - name: admin
+          image: traefik/whoami:v1.10
+          args: ["--port", "8080", "--name", "backend-admin"]
+          ports:
+            - name: admin
+              containerPort: 8080
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 100m, memory: 32Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: lab-netpol
+  labels:
+    app: backend
+spec:
+  selector:
+    app: backend
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+    - name: admin
+      port: 8080
+      targetPort: admin

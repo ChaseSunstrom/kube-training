@@ -1,0 +1,40 @@
+# 01 - nodeSelector: the simplest way to constrain a pod to some nodes.
+#
+# The training cluster labels its two workers:
+#   kube-training-worker   training/zone=zone-a
+#   kube-training-worker2  training/zone=zone-b
+# (see cluster/kind-multi-node.yaml). nodeSelector is a plain map of
+# label=value pairs; a node is eligible only if it has ALL of them (AND).
+#
+# What to look at:
+#   kubectl -n lab-scheduling get pods -l app=zone-a-only -o wide
+#   -> all 3 replicas run on kube-training-worker.
+# If no node matches, the pods stay Pending with a FailedScheduling event
+# ("node(s) didn't match Pod's node affinity/selector"). nodeSelector has no
+# "preferred" form and no operators (In, NotIn, Exists...): for that you need
+# node affinity (02-node-affinity.yaml).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zone-a-only
+  namespace: lab-scheduling
+  labels:
+    app: zone-a-only
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: zone-a-only
+  template:
+    metadata:
+      labels:
+        app: zone-a-only
+    spec:
+      nodeSelector:
+        training/zone: zone-a          # must match a node label exactly
+      containers:
+        - name: app
+          image: traefik/whoami:v1.10  # tiny HTTP server; any small image works
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 50m, memory: 32Mi}

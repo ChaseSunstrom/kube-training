@@ -1,0 +1,47 @@
+# Solution to exercise 4: spread over zones without the "max 1 per zone"
+# limit of anti-affinity.
+#
+# With maxSkew: 1 on training/zone, 5 replicas end up 3 + 2 (skew 1). The
+# anti-affinity version (03-pod-anti-affinity.yaml) would leave replicas 3-5
+# Pending. A second, SOFT constraint on hostname spreads within a zone when
+# there is more than one node per zone (not the case on the training
+# cluster, but typical in real clusters).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zone-spread
+  namespace: lab-scheduling
+  labels:
+    app: zone-spread
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: zone-spread
+  template:
+    metadata:
+      labels:
+        app: zone-spread
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: training/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: zone-spread
+          matchLabelKeys: ["pod-template-hash"]
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          nodeTaintsPolicy: Honor
+          labelSelector:
+            matchLabels:
+              app: zone-spread
+          matchLabelKeys: ["pod-template-hash"]
+      containers:
+        - name: app
+          image: traefik/whoami:v1.10
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 50m, memory: 32Mi}

@@ -1,0 +1,38 @@
+# Solution 02 - report-worker: the command pointed at /bin/bash, which does
+# not exist in busybox (only /bin/sh). The container could not even start,
+# which is why `kubectl logs` was empty - the error was in describe/events
+# (Last State: Terminated, Reason: StartError, Exit Code: 128).
+#
+#   kubectl apply -f modules/16-debugging/solutions/02-bad-command.yaml
+#   kubectl -n lab-debugging logs deploy/report-worker
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: report-worker
+  namespace: lab-debugging
+  labels:
+    app: report-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: report-worker
+  template:
+    metadata:
+      labels:
+        app: report-worker
+    spec:
+      containers:
+        - name: worker
+          image: busybox:1.37
+          command: ["/bin/sh", "-c"]     # FIX: busybox has no bash
+          args:
+            - |
+              echo "report-worker started"
+              while true; do
+                echo "$(date -Iseconds) generating report"
+                sleep 10
+              done
+          resources:
+            requests: { cpu: 5m, memory: 8Mi }
+            limits:   { cpu: 20m, memory: 16Mi }

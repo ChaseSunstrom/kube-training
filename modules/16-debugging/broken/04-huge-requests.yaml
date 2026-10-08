@@ -1,0 +1,33 @@
+# Broken app 04 - "ml-trainer"
+#
+#   kubectl apply -f modules/16-debugging/broken/04-huge-requests.yaml
+#
+# Ticket: "ml-trainer was deployed an hour ago and still has no node."
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ml-trainer
+  namespace: lab-debugging
+  labels:
+    app: ml-trainer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ml-trainer
+  template:
+    metadata:
+      labels:
+        app: ml-trainer
+    spec:
+      containers:
+        - name: trainer
+          image: busybox:1.37
+          command: ["sh", "-c", "echo training; sleep 86400"]
+          resources:
+            requests:
+              cpu: "64"
+              memory: 256Gi
+            limits:
+              cpu: "64"
+              memory: 256Gi

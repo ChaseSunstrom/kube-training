@@ -1,0 +1,24 @@
+# PSA demo 2 - EXPECTED TO BE REJECTED in lab-security-restricted.
+#
+#   kubectl apply -f modules/15-security/psa/02-root-pod.yaml
+#
+# Nothing scary here: a plain busybox with no securityContext - the same pod
+# as 01-pod-root.yaml, which lab-security (baseline) happily admitted.
+# "restricted" rejects it because it does not *prove* it is safe:
+# it must explicitly set runAsNonRoot, drop ALL capabilities, disable
+# privilege escalation and choose a seccomp profile.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: root-pod
+  namespace: lab-security-restricted
+  labels:
+    app: root-pod
+spec:
+  containers:
+    - name: app
+      image: busybox:1.37
+      command: ["sh", "-c", "sleep 86400"]
+      resources:
+        requests: { cpu: 10m, memory: 16Mi }
+        limits:   { cpu: 50m, memory: 32Mi }

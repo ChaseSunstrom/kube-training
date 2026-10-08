@@ -1,0 +1,84 @@
+# 08 - A projected volume: several sources merged into ONE directory.
+#
+# Sources: configMap, secret, downwardAPI, serviceAccountToken, plus two newer
+# ones - clusterTrustBundle (CA bundles) and podCertificate (a kubelet-managed
+# key + certificate issued by a signer) - that need extra cluster setup, so we
+# skip them here. `kubectl explain pod.spec.volumes.projected.sources` lists
+# what your cluster supports. We combine the four everyday ones under
+# /etc/bundle:
+#
+#   /etc/bundle/config/color        <- ConfigMap app-config, key APP_COLOR
+#   /etc/bundle/secrets/username    <- Secret db-creds, key username
+#   /etc/bundle/pod/{name,namespace,labels,mem-limit}
+#                                   <- Downward API (facts about this pod)
+#   /etc/bundle/token               <- a short-lived ServiceAccount JWT with a
+#                                      custom audience, rotated by the kubelet
+#
+# Why the custom token? The default token mounted at
+# /var/run/secrets/kubernetes.io/serviceaccount is meant for the Kubernetes
+# API. A token with audience "vault" (say) can be handed to another system
+# that verifies it, and it is useless against the Kubernetes API itself.
+# We turn the default mount off (automountServiceAccountToken: false) so the
+# only token in the pod is the one we asked for.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: projected-demo
+  namespace: lab-config
+  labels:
+    app: projected-demo
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: projected-demo
+  namespace: lab-config
+  labels:
+    app: projected-demo
+    tier: backend
+spec:
+  serviceAccountName: projected-demo
+  automountServiceAccountToken: false
+  containers:
+    - name: app
+      image: busybox:1.37
+      command: ["sh", "-c", "sleep 3600"]
+      volumeMounts:
+        - name: bundle
+          mountPath: /etc/bundle
+          readOnly: true
+      resources:
+        requests: { cpu: 10m, memory: 16Mi }
+        limits:   { cpu: 50m, memory: 32Mi }
+  volumes:
+    - name: bundle
+      projected:
+        defaultMode: 0440
+        sources:
+          - configMap:
+              name: app-config
+              items:
+                - key: APP_COLOR
+                  path: config/color
+          - secret:
+              name: db-creds
+              items:
+                - key: username
+                  path: secrets/username
+          - downwardAPI:
+              items:
+                - path: pod/name
+                  fieldRef: { fieldPath: metadata.name }
+                - path: pod/namespace
+                  fieldRef: { fieldPath: metadata.namespace }
+                - path: pod/labels          # all labels, one per line
+                  fieldRef: { fieldPath: metadata.labels }
+                - path: pod/mem-limit       # resourceFieldRef needs the container name
+                  resourceFieldRef:
+                    containerName: app
+                    resource: limits.memory
+                    divisor: 1Mi            # report in MiB
+          - serviceAccountToken:
+              audience: vault               # "aud" claim in the JWT
+              expirationSeconds: 3600       # minimum allowed is 600
+              path: token

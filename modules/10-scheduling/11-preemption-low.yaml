@@ -1,0 +1,42 @@
+# 11 - Preemption, part 1: fill a node with LOW-priority pods.
+#
+# To make the demo identical on every laptop (and harmless to anything else
+# running in the cluster) we don't fight over CPU. Instead the README
+# advertises a made-up "extended resource" on ONE worker:
+#
+#   training.example.com/widget: 2      (only on kube-training-worker)
+#
+# Extended resources are counted by the scheduler exactly like CPU/memory,
+# but only pods that ask for them compete for them. This Deployment's two
+# replicas take both widgets.
+#
+# Extended resources must be whole numbers and request == limit (you may
+# set only limits; requests default to the same value).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: low-prio
+  namespace: lab-scheduling
+  labels:
+    app: low-prio
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: low-prio
+  template:
+    metadata:
+      labels:
+        app: low-prio
+    spec:
+      priorityClassName: lab-low
+      terminationGracePeriodSeconds: 5
+      containers:
+        - name: app
+          image: traefik/whoami:v1.10
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits:
+              cpu: 50m
+              memory: 32Mi
+              training.example.com/widget: "1"

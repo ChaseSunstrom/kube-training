@@ -1,0 +1,32 @@
+# 06 - namespaceSelector AND podSelector in ONE "from" element.
+#
+#   from:
+#     - namespaceSelector: {...}     <- one list item ("-") with TWO keys
+#       podSelector: {...}              = BOTH must match (AND)
+#
+# Allows: pods labelled app=frontend that live in lab-netpol-other.
+# Compare with 07, which differs by a single "-" and means something else.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend-allow-other-frontend-and
+  namespace: lab-netpol
+  labels:
+    app: backend
+spec:
+  podSelector:
+    matchLabels:
+      app: backend
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: lab-netpol-other
+          podSelector:                    # no "-" here: same element -> AND
+            matchLabels:
+              app: frontend
+      ports:
+        - protocol: TCP
+          port: 80

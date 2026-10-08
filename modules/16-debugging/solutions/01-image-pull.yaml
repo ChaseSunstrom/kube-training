@@ -1,0 +1,33 @@
+# Solution 01 - shop-frontend: the image tag had a typo ("alpnie").
+#
+#   kubectl apply -f modules/16-debugging/solutions/01-image-pull.yaml
+#   kubectl -n lab-debugging rollout status deploy/shop-frontend
+#
+# Changing the pod template makes the Deployment roll out a new ReplicaSet;
+# the broken pod is replaced automatically.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shop-frontend
+  namespace: lab-debugging
+  labels:
+    app: shop-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: shop-frontend
+  template:
+    metadata:
+      labels:
+        app: shop-frontend
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine        # FIX: was "1.27-alpnie" (typo)
+          ports:
+            - name: http
+              containerPort: 80
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 100m, memory: 64Mi }

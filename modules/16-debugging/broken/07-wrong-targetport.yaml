@@ -1,0 +1,76 @@
+# Broken app 07 - "catalog-api" and its client
+#
+#   kubectl apply -f modules/16-debugging/broken/07-wrong-targetport.yaml
+#
+# Ticket: "catalog-client gets 'connection refused' from catalog-api. This
+# time the Service DOES have endpoints, I checked!"
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: catalog-api
+  namespace: lab-debugging
+  labels:
+    app: catalog-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: catalog-api
+  template:
+    metadata:
+      labels:
+        app: catalog-api
+    spec:
+      containers:
+        - name: api
+          image: traefik/whoami:v1.10
+          resources:
+            requests: { cpu: 5m, memory: 8Mi }
+            limits:   { cpu: 50m, memory: 32Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: catalog-api
+  namespace: lab-debugging
+  labels:
+    app: catalog-api
+spec:
+  selector:
+    app: catalog-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: catalog-client
+  namespace: lab-debugging
+  labels:
+    app: catalog-client
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: catalog-client
+  template:
+    metadata:
+      labels:
+        app: catalog-client
+    spec:
+      containers:
+        - name: client
+          image: curlimages/curl:8.11.1
+          command:
+            - sh
+            - -c
+            - |
+              while true; do
+                echo "$(date -Iseconds) $(curl -sS --max-time 3 http://catalog-api/ 2>&1 | grep -E '^(Hostname|curl)')"
+                sleep 5
+              done
+          resources:
+            requests: { cpu: 5m, memory: 8Mi }
+            limits:   { cpu: 50m, memory: 32Mi }

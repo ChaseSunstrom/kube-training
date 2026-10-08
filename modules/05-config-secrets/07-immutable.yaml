@@ -1,0 +1,36 @@
+# 07 - Immutable ConfigMaps and Secrets.
+#
+# With "immutable: true":
+#   * the data can never be changed again (the API server rejects updates to
+#     data/binaryData/stringData); you can only delete and recreate the object;
+#   * the kubelet stops watching the object, which takes real load off the
+#     API server in clusters with thousands of pods;
+#   * nobody can "hot-fix" production config by accident.
+#
+# The usual pattern is VERSIONED NAMES: feature-flags-v1, feature-flags-v2 ...
+# To roll out new config you create a new object and point the workload at
+# it, which triggers a normal rolling update (and makes rollback trivial).
+# Kustomize's configMapGenerator automates exactly this.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: feature-flags-v1
+  namespace: lab-config
+  labels:
+    app: config-demo
+immutable: true
+data:
+  NEW_CHECKOUT: "false"
+  BETA_BANNER: "true"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: api-key-v1
+  namespace: lab-config
+  labels:
+    app: config-demo
+type: Opaque
+immutable: true
+stringData:
+  API_KEY: not-a-real-key-123

@@ -1,0 +1,14 @@
+# Module 16 - Debugging
+#
+# Everything in this module - the healthy practice apps AND the ten broken
+# apps in broken/ - lives in lab-debugging.
+#
+# Cleanup:  kubectl delete namespace lab-debugging
+# (plus any node-debugger-* pods you created in another namespace by
+#  forgetting -n - see README step 9)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-debugging
+  labels:
+    app: debugging

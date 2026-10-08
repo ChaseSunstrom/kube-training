@@ -1,0 +1,82 @@
+# Solution 07 - catalog-api: the Service forwarded to targetPort 8080, but
+# whoami listens on 80. The selector was right, so the EndpointSlice had both
+# pods - on port 8080, where nothing listens -> "connection refused".
+#
+# Best practice used in the fix: name the container port and use the NAME as
+# targetPort. Then the Service follows the pod spec if the port ever changes.
+#
+#   kubectl apply -f modules/16-debugging/solutions/07-wrong-targetport.yaml
+#   kubectl -n lab-debugging logs deploy/catalog-client --tail=3
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: catalog-api
+  namespace: lab-debugging
+  labels:
+    app: catalog-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: catalog-api
+  template:
+    metadata:
+      labels:
+        app: catalog-api
+    spec:
+      containers:
+        - name: api
+          image: traefik/whoami:v1.10      # listens on port 80
+          ports:
+            - name: http                   # FIX (part 1): name the port...
+              containerPort: 80
+          resources:
+            requests: { cpu: 5m, memory: 8Mi }
+            limits:   { cpu: 50m, memory: 32Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: catalog-api
+  namespace: lab-debugging
+  labels:
+    app: catalog-api
+spec:
+  selector:
+    app: catalog-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: http          # FIX (part 2): ...and refer to it by name (was 8080)
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: catalog-client
+  namespace: lab-debugging
+  labels:
+    app: catalog-client
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: catalog-client
+  template:
+    metadata:
+      labels:
+        app: catalog-client
+    spec:
+      containers:
+        - name: client
+          image: curlimages/curl:8.11.1
+          command:
+            - sh
+            - -c
+            - |
+              while true; do
+                echo "$(date -Iseconds) $(curl -sS --max-time 3 http://catalog-api/ 2>&1 | grep -E '^(Hostname|curl)')"
+                sleep 5
+              done
+          resources:
+            requests: { cpu: 5m, memory: 8Mi }
+            limits:   { cpu: 50m, memory: 32Mi }

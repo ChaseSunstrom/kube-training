@@ -1,0 +1,50 @@
+# Module 15 - Security
+#
+# This module uses TWO namespaces, because Pod Security Admission (PSA) is
+# configured per namespace and you need to see two different levels side by side:
+#
+#   lab-security             enforce=baseline, warn+audit=restricted
+#                            -> root pods are still ALLOWED here, but every
+#                               apply prints a warning listing what would break
+#                               under "restricted". Great for learning.
+#   lab-security-restricted  enforce+warn+audit=restricted
+#                            -> anything that is not hardened is REJECTED.
+#
+# The three PSA modes:
+#   enforce  violations are rejected (pods only - see psa/03-*.yaml for the
+#            surprise this causes with Deployments)
+#   warn     the client gets a "Warning: would violate PodSecurity ..." message
+#            (pods AND workload templates: Deployments, Jobs, ...)
+#   audit    an annotation is added to the API audit log event
+#
+# The "-version" labels pin the policy to the rules of a given Kubernetes
+# minor release, so upgrading the cluster does not suddenly tighten the rules
+# under you. Use "latest" if you always want the newest rules.
+#
+# Cleanup: kubectl delete namespace lab-security lab-security-restricted
+#          (plus the two cluster-scoped ValidatingAdmissionPolicies - see README)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-security
+  labels:
+    app: security
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/enforce-version: v1.33
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: v1.33
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: v1.33
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-security-restricted
+  labels:
+    app: security
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.33
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: v1.33
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: v1.33

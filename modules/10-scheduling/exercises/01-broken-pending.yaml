@@ -1,0 +1,38 @@
+# Exercise 1 - "Why is my pod Pending?"
+#
+# Apply this, find out from the scheduler's events why the pods never start,
+# and fix the manifest so that the pods run in zone-b - without removing the
+# node affinity block. (Solution: ../solutions/01-fixed.yaml)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: broken
+  namespace: lab-scheduling
+  labels:
+    app: broken
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: broken
+  template:
+    metadata:
+      labels:
+        app: broken
+    spec:
+      nodeSelector:
+        training/zone: zone-a
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: training/zone
+                    operator: In
+                    values: ["zone-b"]
+      containers:
+        - name: app
+          image: traefik/whoami:v1.10
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 50m, memory: 32Mi}

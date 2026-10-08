@@ -1,0 +1,32 @@
+# Exercise 1 - solution.
+#
+# Generated with:
+#   kubectl run node-reporter --image=busybox:1.37 --restart=Never -n lab-pods \
+#     --dry-run=client -o yaml -- sh -c 'echo "I ran on $NODE_NAME"' > node-reporter.yaml
+# (everything after `--` becomes `args`; with `--command` it would become `command`)
+# then the NODE_NAME env var (Downward API) and resources were added.
+#
+#   kubectl apply -f modules/01-pods/solutions/node-reporter.yaml
+#   kubectl logs node-reporter -n lab-pods                 # I ran on kube-training-worker2
+#   kubectl get pod node-reporter -n lab-pods -o jsonpath='{.status.phase}{"\n"}'   # Succeeded
+apiVersion: v1
+kind: Pod
+metadata:
+  name: node-reporter
+  namespace: lab-pods
+  labels:
+    app: node-reporter
+spec:
+  restartPolicy: Never
+  containers:
+    - name: node-reporter
+      image: busybox:1.37
+      args: ["sh", "-c", "echo \"I ran on $NODE_NAME\""]
+      env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+      resources:
+        requests: { cpu: 5m, memory: 8Mi }
+        limits: { cpu: 50m, memory: 16Mi }

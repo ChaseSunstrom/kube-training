@@ -1,0 +1,55 @@
+# 03 - Pod ANTI-affinity: "never put two of these on the same node".
+#
+# Node affinity looks at NODE labels. Pod (anti-)affinity looks at the labels
+# of PODS ALREADY RUNNING, grouped by a topologyKey:
+#
+#   topologyKey: kubernetes.io/hostname  -> the "domain" is a single node
+#   topologyKey: training/zone           -> the "domain" is every node with the
+#                                           same training/zone value
+#
+# Rule below: "do not schedule me into a domain (node) that already runs a
+# pod labelled app=web". With 2 schedulable workers you get at most 2 web
+# pods. Scale to 3 and the third stays Pending - that's the lab's
+# FailedScheduling example.
+#
+# Required anti-affinity on hostname is how you make sure one node failure
+# can't take out every replica. If you'd rather have "spread if possible, but
+# still run the replica", use preferredDuringScheduling... (weight + podAffinityTerm)
+# or topologySpreadConstraints with whenUnsatisfiable: ScheduleAnyway (08).
+#
+# What to look at:
+#   kubectl -n lab-scheduling get pods -l app=web -o wide   -> one per worker
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: lab-scheduling
+  labels:
+    app: web
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: web               # "other pods like me"
+              topologyKey: kubernetes.io/hostname
+              # namespaces / namespaceSelector are omitted, so only pods in
+              # THIS pod's namespace (lab-scheduling) are considered.
+      containers:
+        - name: web
+          image: nginx:1.27-alpine
+          ports:
+            - containerPort: 80
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 100m, memory: 64Mi}

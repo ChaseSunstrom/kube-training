@@ -1,0 +1,24 @@
+# 06 - A pod that declares NO resources, in the namespace with a LimitRange.
+#
+# Without the LimitRange, the quota (04) would reject it. With it, the
+# LimitRanger plugin fills in requests/limits at admission time - you can
+# see the result in the stored object and in an annotation it adds.
+#
+#   kubectl apply -f modules/02-namespaces-labels/06-pod-defaults.yaml
+#   kubectl get pod defaults-demo -n lab-namespaces-team-a \
+#     -o jsonpath='{.spec.containers[0].resources}{"\n"}'
+#   kubectl get pod defaults-demo -n lab-namespaces-team-a \
+#     -o jsonpath='{.metadata.annotations.kubernetes\.io/limit-ranger}{"\n"}'
+apiVersion: v1
+kind: Pod
+metadata:
+  name: defaults-demo
+  namespace: lab-namespaces-team-a
+  labels:
+    app: defaults-demo
+spec:
+  containers:
+    - name: app
+      image: busybox:1.37
+      command: ["sh", "-c", "trap 'exit 0' TERM; sleep infinity & wait"]
+      # no `resources:` on purpose - the LimitRange provides them

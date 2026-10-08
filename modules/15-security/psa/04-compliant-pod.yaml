@@ -1,0 +1,38 @@
+# PSA demo 4 - ADMITTED in lab-security-restricted.
+#
+#   kubectl apply -f modules/15-security/psa/04-compliant-pod.yaml
+#
+# The minimum a pod must say to pass the "restricted" level:
+#   runAsNonRoot: true                      (and a non-zero runAsUser if the image is root)
+#   seccompProfile.type: RuntimeDefault     (or Localhost)
+#   allowPrivilegeEscalation: false         (every container)
+#   capabilities.drop: ["ALL"]              (every container; only NET_BIND_SERVICE may be added)
+#   + no privileged, no host namespaces, no hostPath, no hostPort,
+#     only "safe" volume types (configMap, secret, emptyDir, projected, PVC, ...)
+# readOnlyRootFilesystem is NOT required by restricted - but you should still set it.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: compliant
+  namespace: lab-security-restricted
+  labels:
+    app: compliant
+spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534          # "nobody"
+    runAsGroup: 65534
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: app
+      image: busybox:1.37
+      command: ["sh", "-c", "id; sleep 86400"]
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: ["ALL"]
+      resources:
+        requests: { cpu: 10m, memory: 16Mi }
+        limits:   { cpu: 50m, memory: 32Mi }

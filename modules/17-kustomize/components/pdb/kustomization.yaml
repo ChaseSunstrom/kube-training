@@ -1,0 +1,13 @@
+# components/pdb - a Kustomize Component: a reusable bundle of resources
+# and/or patches that an overlay can opt into with `components:`.
+#
+# Difference to a base: a base is the foundation an overlay builds ON; a
+# component is mixed IN to whatever includes it, after the overlay's
+# resources, so it can patch them. Use components for optional features you
+# want in some environments but not others (PDBs, monitoring sidecars, an
+# Ingress, debug settings ...).
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+resources:
+  - pdb.yaml

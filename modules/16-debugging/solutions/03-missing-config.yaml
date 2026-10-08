@@ -1,0 +1,60 @@
+# Solution 03 - billing-api: the Deployment referenced the ConfigMap key
+# PAYMENT_GATEWAY, but the ConfigMap only has PAYMENT_GATEWAY_URL.
+# The kubelet can't build the container's environment, so the container is
+# never created: CreateContainerConfigError.
+#
+#   kubectl apply -f modules/16-debugging/solutions/03-missing-config.yaml
+#   kubectl -n lab-debugging rollout status deploy/billing-api
+#
+# (Alternative fix: add the missing key to the ConfigMap. Or, if the value is
+#  genuinely optional, set `optional: true` on the configMapKeyRef.)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: billing-config
+  namespace: lab-debugging
+  labels:
+    app: billing-api
+data:
+  LOG_LEVEL: info
+  CURRENCY: EUR
+  PAYMENT_GATEWAY_URL: http://payments.example.internal
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: billing-api
+  namespace: lab-debugging
+  labels:
+    app: billing-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: billing-api
+  template:
+    metadata:
+      labels:
+        app: billing-api
+    spec:
+      containers:
+        - name: api
+          image: hashicorp/http-echo:1.0
+          args: ["-listen=:5678", "-text=billing-api ok"]
+          env:
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: billing-config
+                  key: LOG_LEVEL
+            - name: GATEWAY_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: billing-config
+                  key: PAYMENT_GATEWAY_URL     # FIX: the key is PAYMENT_GATEWAY_URL
+          ports:
+            - name: http
+              containerPort: 5678
+          resources:
+            requests: { cpu: 5m, memory: 8Mi }
+            limits:   { cpu: 50m, memory: 32Mi }

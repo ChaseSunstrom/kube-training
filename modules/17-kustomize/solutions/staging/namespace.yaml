@@ -1,0 +1,7 @@
+# Namespace for the staging overlay (exercise 1).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-kustomize-staging
+  labels:
+    app: kustomize

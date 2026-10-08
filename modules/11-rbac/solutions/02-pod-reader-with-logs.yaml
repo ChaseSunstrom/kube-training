@@ -1,0 +1,21 @@
+# Solution to exercise 2: allow reading pod logs.
+#
+# Logs are the SUBRESOURCE pods/log. Listing pods does not imply reading
+# their logs (logs often contain sensitive data). `kubectl logs` does a GET on
+# pods/log (and a GET on the pod first to find its containers).
+#   kubectl auth can-i get pods --subresource=log -n lab-rbac \
+#     --as=system:serviceaccount:lab-rbac:pod-viewer      # -> yes
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pod-reader
+  namespace: lab-rbac
+  labels:
+    app: pod-reader
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]

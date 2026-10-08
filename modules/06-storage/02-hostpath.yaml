@@ -1,0 +1,47 @@
+# 02 - hostPath: mount a directory of the NODE into the pod.
+#
+# Read this before you ever use hostPath for real:
+#   * It is a hole through the container boundary. A writable hostPath of
+#     "/" or "/var/run/containerd" lets a pod take over the node. That is why
+#     Pod Security Admission's "baseline" and "restricted" levels forbid
+#     hostPath entirely (see modules/15-security).
+#   * Data is tied to whichever node the pod happens to land on. Reschedule
+#     the pod to another node and it sees a different (or empty) directory.
+#   * No capacity accounting, no access control, no cleanup.
+#
+# Legitimate users are node agents (log shippers reading /var/log, CNI and CSI
+# plugins, monitoring agents) - usually DaemonSets, see modules/09-daemonsets.
+# Applications should use PersistentVolumeClaims instead.
+#
+# This pod reads the node's /var/log, READ-ONLY, on the zone-a worker.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: hostpath-demo
+  namespace: lab-storage
+  labels:
+    app: hostpath-demo
+spec:
+  nodeSelector:
+    training/zone: zone-a
+  containers:
+    - name: viewer
+      image: busybox:1.37
+      command: ["sh", "-c", "ls /host/var/log; sleep 3600"]
+      volumeMounts:
+        - name: node-logs
+          mountPath: /host/var/log
+          readOnly: true          # always mount host paths read-only if you can
+      resources:
+        requests: { cpu: 10m, memory: 16Mi }
+        limits:   { cpu: 50m, memory: 32Mi }
+  volumes:
+    - name: node-logs
+      hostPath:
+        path: /var/log
+        # type is a safety check done before mounting:
+        #   Directory          - must already exist (fail otherwise)
+        #   DirectoryOrCreate  - create it (0755, owned by kubelet) if missing
+        #   File, FileOrCreate, Socket, CharDevice, BlockDevice
+        #   ""  (default)      - no check at all
+        type: Directory

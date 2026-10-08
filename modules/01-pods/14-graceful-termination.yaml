@@ -1,0 +1,81 @@
+# 14 - Graceful termination: preStop hook, SIGTERM, terminationGracePeriodSeconds.
+#
+# When a pod is deleted (kubectl delete, a rollout, a node drain...):
+#   1. The pod gets a deletionTimestamp and shows Terminating. In parallel,
+#      it is removed from Service endpoints (module 04).
+#   2. The kubelet runs each container's preStop hook, if any.
+#   3. The kubelet sends SIGTERM to each container's main process (PID 1).
+#   4. If the container is still running when terminationGracePeriodSeconds
+#      (default 30s, counted from step 2!) runs out, it gets SIGKILL.
+#
+# Two pods show the good and the bad case:
+#   graceful - has a preStop hook and a SIGTERM handler: exits cleanly in ~8s.
+#   stubborn - PID 1 is `sleep`, which has no SIGTERM handler. The kernel
+#              never applies a default "terminate" action to PID 1 of a
+#              namespace, so SIGTERM is ignored and the kubelet must wait
+#              the full grace period (10s here) and then SIGKILL it.
+#
+#   kubectl apply -f modules/01-pods/14-graceful-termination.yaml
+#   # terminal 1:
+#   kubectl logs -f graceful -n lab-pods
+#   # terminal 2:
+#   time kubectl delete pod graceful -n lab-pods      # ~8s
+#   time kubectl delete pod stubborn -n lab-pods      # ~10s = the whole grace period
+apiVersion: v1
+kind: Pod
+metadata:
+  name: graceful
+  namespace: lab-pods
+  labels:
+    app: termination-demo
+spec:
+  terminationGracePeriodSeconds: 20   # budget for preStop + SIGTERM handling
+  containers:
+    - name: app
+      image: busybox:1.37
+      command:
+        - sh
+        - -c
+        - |
+          on_term() {
+            echo "$(date +%T) got SIGTERM - finishing in-flight work"
+            sleep 3
+            echo "$(date +%T) clean exit"
+            exit 0
+          }
+          trap on_term TERM
+          echo "$(date +%T) started, waiting for work"
+          # Run sleep in the background and `wait`: a shell only runs its trap
+          # handler between commands, and `wait` returns as soon as a signal arrives.
+          sleep infinity & wait
+      lifecycle:
+        preStop:
+          # Runs BEFORE SIGTERM. Classic use: sleep a few seconds so load
+          # balancers and kube-proxy stop sending new requests first.
+          # Writing to /proc/1/fd/1 makes the message show up in `kubectl logs`.
+          # (Kubernetes 1.33 also has a built-in `sleep: {seconds: 5}` action.)
+          exec:
+            command: ["sh", "-c", "echo \"$(date +%T) preStop hook: draining for 5s\" > /proc/1/fd/1; sleep 5"]
+      resources:
+        requests: { cpu: 5m, memory: 8Mi }
+        limits: { cpu: 50m, memory: 16Mi }
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: stubborn
+  namespace: lab-pods
+  labels:
+    app: termination-demo
+spec:
+  terminationGracePeriodSeconds: 10
+  containers:
+    - name: app
+      image: busybox:1.37
+      # `sleep` is PID 1 and installs no signal handlers -> SIGTERM is ignored.
+      # Real-world version of this bug: `CMD start.sh` where the script does not
+      # `exec` the app, so the app never receives SIGTERM.
+      command: ["sleep", "3600"]
+      resources:
+        requests: { cpu: 5m, memory: 8Mi }
+        limits: { cpu: 50m, memory: 16Mi }

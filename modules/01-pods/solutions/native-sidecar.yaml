@@ -1,0 +1,33 @@
+# Exercise 3 - solution: move the proxy to initContainers with restartPolicy: Always.
+#
+#   kubectl delete pod classic-sidecar -n lab-pods
+#   kubectl apply -f modules/01-pods/solutions/native-sidecar.yaml
+#   kubectl get pod classic-sidecar -n lab-pods -w     # ... 2/2 Running -> Completed
+#
+# The kubelet now knows "proxy" is a helper: it starts it first, and once all
+# regular containers have exited it sends the sidecar SIGTERM and the pod
+# completes. Bonus: the proxy is guaranteed to be running before `app` starts.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: classic-sidecar
+  namespace: lab-pods
+  labels:
+    app: classic-sidecar
+spec:
+  restartPolicy: Never
+  initContainers:
+    - name: proxy
+      image: busybox:1.37
+      restartPolicy: Always
+      command: ["sh", "-c", "trap 'exit 0' TERM; echo proxy up; sleep infinity & wait"]
+      resources:
+        requests: { cpu: 5m, memory: 8Mi }
+        limits: { cpu: 50m, memory: 16Mi }
+  containers:
+    - name: app
+      image: busybox:1.37
+      command: ["sh", "-c", "echo working; sleep 5; echo done"]
+      resources:
+        requests: { cpu: 5m, memory: 8Mi }
+        limits: { cpu: 50m, memory: 16Mi }

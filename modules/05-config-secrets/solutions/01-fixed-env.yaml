@@ -1,0 +1,35 @@
+# Solution to exercise 1.
+#
+# The key APP_COLOUR does not exist in app-config (it is APP_COLOR), so the
+# kubelet cannot build the environment and the container stays in
+# CreateContainerConfigError:
+#   Error: couldn't find key APP_COLOUR in ConfigMap lab-config/app-config
+#
+# Fix A (below): reference the right key.
+# Fix B: keep the key and add "optional: true" - the pod starts and COLOUR
+#        is simply unset. Only do that when the app has a sensible default.
+#
+# Pods are mostly immutable, so delete the broken one first:
+#   kubectl delete pod broken-env -n lab-config
+#   kubectl apply -f solutions/01-fixed-env.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: broken-env
+  namespace: lab-config
+  labels:
+    app: broken-env
+spec:
+  containers:
+    - name: app
+      image: busybox:1.37
+      command: ["sh", "-c", "echo colour is $COLOUR; sleep 3600"]
+      env:
+        - name: COLOUR
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: APP_COLOR
+      resources:
+        requests: { cpu: 10m, memory: 16Mi }
+        limits:   { cpu: 50m, memory: 32Mi }

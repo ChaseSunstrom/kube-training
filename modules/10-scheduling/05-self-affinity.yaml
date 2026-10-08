@@ -1,0 +1,58 @@
+# 05 - The "first pod of a self-affine group" rule.
+#
+# Required pod affinity normally needs a matching pod to ALREADY exist (see
+# 04, and 06 for what happens when it doesn't). So how can this Deployment
+# ever start? Every replica says "put me on a node that runs an
+# app=self-affine pod" - and at the beginning there are none.
+#
+# The scheduler has an explicit escape hatch for this (InterPodAffinity
+# plugin): a pod may ignore its required podAffinity and go to any node that
+# has the topologyKey label IF
+#   1. NO pod in the cluster (in the namespaces the term looks at) matches
+#      the affinity term's selector yet, AND
+#   2. the incoming pod's OWN labels (and namespace) match all of its
+#      required affinity terms.
+# Without that rule a self-affine group could never schedule its first member.
+#
+# Then the group "sticks together": replica 1 lands anywhere, replicas 2..N
+# must follow it to the same node (topologyKey kubernetes.io/hostname).
+#
+# Why you care: this is how you make two DIFFERENT workloads land on the same
+# node without hard-coding a node name - e.g. two pods that both mount one
+# ReadWriteOnce volume (RWO = one NODE, not one pod). Both get a shared label
+# and a required podAffinity on it; whichever is scheduled first picks the
+# node. See ../../scenarios/rwo-pvc-ordered-pods/README.md.
+#
+# What to look at:
+#   kubectl -n lab-scheduling get pods -l app=self-affine -o wide
+#   -> all 3 on ONE node (which one is up to the scheduler).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: self-affine
+  namespace: lab-scheduling
+  labels:
+    app: self-affine
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: self-affine
+  template:
+    metadata:
+      labels:
+        app: self-affine          # <- matches the affinity term below = "self-affine"
+    spec:
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: self-affine
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - name: app
+          image: traefik/whoami:v1.10
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 50m, memory: 32Mi}

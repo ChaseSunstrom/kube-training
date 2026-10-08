@@ -1,0 +1,53 @@
+# Broken app 08 - "status-page"
+#
+#   kubectl apply -f modules/16-debugging/broken/08-readiness-port.yaml
+#
+# Ticket: "status-page pods are Running but the Service sends no traffic to
+# them, and the rollout never finishes."
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: status-page
+  namespace: lab-debugging
+  labels:
+    app: status-page
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: status-page
+  template:
+    metadata:
+      labels:
+        app: status-page
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          ports:
+            - name: http
+              containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            periodSeconds: 5
+            failureThreshold: 2
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 100m, memory: 64Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: status-page
+  namespace: lab-debugging
+  labels:
+    app: status-page
+spec:
+  selector:
+    app: status-page
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

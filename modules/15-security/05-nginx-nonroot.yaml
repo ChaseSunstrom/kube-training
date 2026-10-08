@@ -1,0 +1,106 @@
+# 05 - nginx running as non-root with a read-only root filesystem, admitted by
+#      the "restricted" Pod Security Standard.
+#
+#   kubectl apply -f modules/15-security/04-nginx-nonroot-config.yaml -f modules/15-security/05-nginx-nonroot.yaml
+#   kubectl -n lab-security-restricted rollout status deploy/nginx-nonroot
+#   kubectl -n lab-security-restricted exec deploy/nginx-nonroot -- ps -o user,pid,comm
+#   kubectl -n lab-security-restricted port-forward svc/nginx-nonroot 8080:80   # then curl localhost:8080
+#
+# What makes nginx happy without root:
+#   runAsUser 101 / runAsGroup 101  the "nginx" user that already exists in the image.
+#                                   Must be NUMERIC: with runAsNonRoot the kubelet
+#                                   cannot verify a user *name* and refuses to start.
+#   listen 8080                     from the ConfigMap in 04.
+#   emptyDir /var/cache/nginx       proxy/client-body temp dirs.
+#   emptyDir /var/run               pid file. (On Alpine /var/run is a symlink to
+#                                   /run; the mount follows it, so /run/nginx.pid
+#                                   lands in the emptyDir.)
+#   emptyDir /tmp                   good hygiene: lots of software assumes it can write /tmp.
+# Everything else in the image stays read-only.
+#
+# Harmless messages you will see in the logs, and why:
+#   "10-listen-on-ipv6-by-default.sh: info: ..." - the entrypoint script would
+#       like to add an IPv6 listen line to default.conf; it can't/needn't here.
+#   [warn] the "user" directive makes sense only if the master process runs
+#   with super-user privileges, ignored
+#       - nginx.conf says "user nginx;" but we already ARE nginx.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-nonroot
+  namespace: lab-security-restricted
+  labels:
+    app: nginx-nonroot
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nginx-nonroot
+  template:
+    metadata:
+      labels:
+        app: nginx-nonroot
+    spec:
+      automountServiceAccountToken: false   # nginx never talks to the API server (see 06)
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        fsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          ports:
+            - name: http
+              containerPort: 8080
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - { name: conf,  mountPath: /etc/nginx/conf.d, readOnly: true }
+            - { name: cache, mountPath: /var/cache/nginx }
+            - { name: run,   mountPath: /var/run }
+            - { name: tmp,   mountPath: /tmp }
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 100m, memory: 64Mi }
+      volumes:
+        - name: conf
+          configMap:
+            name: nginx-nonroot
+        - name: cache
+          emptyDir: {}
+        - name: run
+          emptyDir:
+            medium: Memory          # tmpfs; tiny pid file, counts against the memory limit
+            sizeLimit: 1Mi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 16Mi
+---
+# Clients keep using port 80 - the Service maps it to the container's 8080.
+# Running non-root is an implementation detail nobody outside the pod sees.
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-nonroot
+  namespace: lab-security-restricted
+  labels:
+    app: nginx-nonroot
+spec:
+  selector:
+    app: nginx-nonroot
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

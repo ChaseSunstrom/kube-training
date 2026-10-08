@@ -1,0 +1,61 @@
+# 06 - Two containers in one pod, sharing an emptyDir volume.
+#
+# Containers in a pod share:
+#   * the network namespace: one IP, and they reach each other on localhost
+#   * any volumes they both mount (here an emptyDir)
+# They do NOT share a filesystem (each has its own image) or, by default,
+# a process namespace (set shareProcessNamespace: true if you need that).
+#
+#   kubectl apply -f modules/01-pods/06-multi-container.yaml
+#   kubectl get pod shared-volume -n lab-pods            # READY 2/2
+#   kubectl logs shared-volume -n lab-pods -c writer     # -c picks the container
+#   kubectl exec shared-volume -n lab-pods -c web -- wget -qO- http://localhost/
+#
+# Put containers in the same pod only when they must live and die together
+# and share files or localhost (helper/adapter/proxy patterns). Two
+# independent apps belong in two Deployments.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: shared-volume
+  namespace: lab-pods
+  labels:
+    app: shared-volume
+spec:
+  containers:
+    - name: web
+      image: nginx:1.27-alpine
+      ports:
+        - containerPort: 80
+      volumeMounts:
+        - name: html
+          mountPath: /usr/share/nginx/html   # nginx serves whatever the writer puts here
+          readOnly: true
+      resources:
+        requests: { cpu: 10m, memory: 16Mi }
+        limits: { cpu: 100m, memory: 64Mi }
+    - name: writer
+      image: busybox:1.37
+      command:
+        - sh
+        - -c
+        - |
+          trap 'exit 0' TERM
+          while true; do
+            echo "<p>$(date) - written by the writer container</p>" >> /html/index.html
+            echo "appended a line"
+            sleep 5 & wait
+          done
+      volumeMounts:
+        - name: html
+          mountPath: /html                   # same volume, different path: that is fine
+      resources:
+        requests: { cpu: 5m, memory: 8Mi }
+        limits: { cpu: 50m, memory: 16Mi }
+  volumes:
+    # emptyDir: created empty when the pod starts on a node, deleted when the
+    # pod is removed. Survives container restarts. Lives on the node's disk
+    # (or in RAM with `medium: Memory`, which then counts against memory limits).
+    - name: html
+      emptyDir:
+        sizeLimit: 10Mi

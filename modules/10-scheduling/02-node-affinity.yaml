@@ -1,0 +1,68 @@
+# 02 - Node affinity: nodeSelector with operators, plus a "soft" form.
+#
+# requiredDuringSchedulingIgnoredDuringExecution  (hard rule, a FILTER)
+#   The pod is only placed on nodes that match. Here: any node that HAS a
+#   training/zone label (operator Exists), i.e. the two workers - never the
+#   control-plane, even if it were untainted.
+#
+# preferredDuringSchedulingIgnoredDuringExecution (soft rule, a SCORE)
+#   Each matching term adds its weight (1-100) to the node's score. Here
+#   zone-b scores 80 and zone-a scores 20, so zone-b wins - but this is only
+#   one input to the scheduler's scoring; if zone-b were full the pods would
+#   still land on zone-a.
+#
+# "IgnoredDuringExecution" means: if node labels change AFTER the pod is
+# running, the pod is NOT evicted. Affinity is checked at scheduling time only.
+#
+# Logic cheat sheet:
+#   nodeSelectorTerms:      OR  (any term may match)
+#   matchExpressions in a term: AND (all must match)
+#   operators: In, NotIn, Exists, DoesNotExist, Gt, Lt (Gt/Lt compare integers)
+#   NotIn / DoesNotExist give you "node ANTI-affinity".
+#
+# What to look at:
+#   kubectl -n lab-scheduling get pods -l app=prefers-zone-b -o wide
+#   -> all (or nearly all) replicas on kube-training-worker2.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prefers-zone-b
+  namespace: lab-scheduling
+  labels:
+    app: prefers-zone-b
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: prefers-zone-b
+  template:
+    metadata:
+      labels:
+        app: prefers-zone-b
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: training/zone
+                    operator: Exists       # any value, the label just has to be there
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 80                   # strong preference ...
+              preference:
+                matchExpressions:
+                  - key: training/zone
+                    operator: In
+                    values: ["zone-b"]
+            - weight: 20                   # ... weak fallback preference
+              preference:
+                matchExpressions:
+                  - key: training/zone
+                    operator: In
+                    values: ["zone-a"]
+      containers:
+        - name: app
+          image: traefik/whoami:v1.10
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 50m, memory: 32Mi}

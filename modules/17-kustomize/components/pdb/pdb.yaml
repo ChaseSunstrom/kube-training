@@ -1,0 +1,14 @@
+# PodDisruptionBudget: during voluntary disruptions (node drains, cluster
+# upgrades) at most 1 "web" pod may be down at a time. It gets the including
+# overlay's namespace, name prefix/suffix and labels like everything else.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web
+  labels:
+    app: web
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: web

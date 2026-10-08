@@ -1,0 +1,56 @@
+# 02 - A ReplicaSet, to see that selectors are how Kubernetes links objects.
+#
+# A ReplicaSet keeps N pods matching its selector running. (You will
+# normally let a Deployment manage ReplicaSets for you - module 03.)
+# It does not "remember" its pods: on every sync it counts the pods that
+# match the selector right now. Change a pod's labels so it no longer
+# matches, and the ReplicaSet lets go of it and creates a replacement.
+#
+#   kubectl apply -f modules/02-namespaces-labels/02-replicaset.yaml
+#   kubectl get pods -n lab-namespaces -l app=frontend -L app.kubernetes.io/version
+#
+# Labels here follow the "recommended labels" (app.kubernetes.io/*) that
+# Helm charts, dashboards and many tools understand, plus our own `app`.
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: frontend
+  namespace: lab-namespaces
+  labels:
+    app: frontend
+    app.kubernetes.io/name: frontend          # the application's name
+    app.kubernetes.io/instance: frontend-lab  # this installation of it (unique per install)
+    app.kubernetes.io/version: "1.27"         # app version (a string!)
+    app.kubernetes.io/component: web          # its role in the architecture
+    app.kubernetes.io/part-of: shop           # the bigger application it belongs to
+    app.kubernetes.io/managed-by: kubectl     # the tool managing it (helm, kustomize, argocd...)
+spec:
+  replicas: 3
+  selector:
+    # Both forms can be combined; ALL conditions must match (logical AND).
+    matchLabels:
+      app: frontend
+    matchExpressions:
+      - key: tier
+        operator: In            # In, NotIn, Exists, DoesNotExist
+        values: [frontend]
+  template:
+    metadata:
+      labels:                   # must satisfy the selector above, or the API rejects the RS
+        app: frontend
+        tier: frontend
+        app.kubernetes.io/name: frontend
+        app.kubernetes.io/instance: frontend-lab
+        app.kubernetes.io/version: "1.27"
+        app.kubernetes.io/component: web
+        app.kubernetes.io/part-of: shop
+        app.kubernetes.io/managed-by: kubectl
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          ports:
+            - containerPort: 80
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 100m, memory: 64Mi }

@@ -1,0 +1,49 @@
+# overlays/dev - the base, adjusted for a developer environment.
+#
+#   kubectl kustomize modules/17-kustomize/overlays/dev     # render
+#   kubectl diff     -k modules/17-kustomize/overlays/dev   # what would change in the cluster
+#   kubectl apply    -k modules/17-kustomize/overlays/dev   # render + apply
+#   kubectl delete   -k modules/17-kustomize/overlays/dev   # remove everything it created
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base            # a directory with a kustomization.yaml (could also be a git URL)
+  - namespace.yaml
+
+# Every namespaced object gets metadata.namespace: lab-kustomize-dev.
+namespace: lab-kustomize-dev
+
+# Every object name gets a prefix - and every REFERENCE to it is updated too
+# (Service -> nothing to update here, but envFrom -> dev-app-config-<hash>).
+# Kustomize does not prefix the Namespace object itself.
+namePrefix: dev-
+
+labels:
+  - pairs:
+      env: dev
+    includeSelectors: false
+    includeTemplates: true
+
+# Change the replica count without a patch.
+replicas:
+  - name: web
+    count: 1
+
+# Merge extra/overridden keys into the base's generated ConfigMap.
+# The content changes, so the hash - and therefore the name - changes too.
+configMapGenerator:
+  - name: app-config
+    behavior: merge
+    literals:
+      - WHOAMI_NAME=kustomize-dev     # overrides the base value
+      - FEATURE_SEARCH=on             # overrides the base value
+      - DEBUG=true                    # new key, only in dev
+
+# Replace the base's placeholder Secret entirely. Literals are fine for a
+# throwaway dev value; never commit real secrets (see the prod overlay).
+secretGenerator:
+  - name: app-secret
+    behavior: replace
+    literals:
+      - API_TOKEN=dev-token-not-secret

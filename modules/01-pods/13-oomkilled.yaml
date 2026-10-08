@@ -1,0 +1,40 @@
+# 13 - OOMKilled: what happens when a container exceeds its memory limit.
+#
+# The memory limit becomes a cgroup limit. When the processes in the
+# container try to use more, the kernel's OOM killer kills one (SIGKILL,
+# no chance to clean up). The kubelet reports reason OOMKilled, exit code
+# 137 (= 128 + 9, i.e. "killed by signal 9"), and restarts the container
+# according to restartPolicy - so you get OOMKilled -> CrashLoopBackOff.
+#
+# The "app" here is `dd` with a 256 MiB block size: dd allocates (and fills)
+# a 256 MiB buffer, but the limit is 64Mi.
+#
+#   kubectl apply -f modules/01-pods/13-oomkilled.yaml
+#   kubectl get pod oom-demo -n lab-pods -w        # OOMKilled -> CrashLoopBackOff
+#   kubectl get pod oom-demo -n lab-pods \
+#     -o jsonpath='{.status.containerStatuses[0].lastState.terminated.reason}{"\n"}'
+#
+# Contrast with CPU: a container that wants more CPU than its limit is only
+# throttled. Memory cannot be "throttled" - it can only be refused.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: oom-demo
+  namespace: lab-pods
+  labels:
+    app: oom-demo
+spec:
+  containers:
+    - name: hog
+      image: busybox:1.37
+      command:
+        - sh
+        - -c
+        - |
+          echo "allocating 256 MiB with a 64 MiB limit..."
+          # `exec` replaces the shell, so dd is the container's main process
+          # (PID 1) and its death ends the container.
+          exec dd if=/dev/zero of=/dev/null bs=256M count=1
+      resources:
+        requests: { cpu: 10m, memory: 64Mi }
+        limits: { cpu: 100m, memory: 64Mi }

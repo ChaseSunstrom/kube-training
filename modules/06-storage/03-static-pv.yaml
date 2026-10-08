@@ -1,0 +1,45 @@
+# 03 - STATIC provisioning, part 1: an administrator creates a PersistentVolume.
+#
+# A PersistentVolume (PV) is a CLUSTER-SCOPED object that represents a real
+# piece of storage (a cloud disk, an NFS export, a local disk ...). With static
+# provisioning a human creates PVs up front, and claims (PVCs) bind to them.
+#
+# Here the "real storage" is a directory on one node. Production clusters
+# would use the "local" volume type for that (a pre-formatted disk, with a
+# no-provisioner StorageClass); hostPath + nodeAffinity is the same idea and
+# needs no preparation on the node, so it is handy for a lab.
+#
+# nodeAffinity on a PV is a hard rule for the SCHEDULER: any pod that uses
+# this PV can only run on a node matching it - here the node labelled
+# training/zone=zone-a (kube-training-worker), because that is where the data
+# is. Real local PVs usually match kubernetes.io/hostname instead; we use the
+# zone label so the file works whatever your nodes are called.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: lab-static-pv
+  labels:
+    app: static-demo          # the PVC in 04 selects on this label
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  # Retain is the default for manually created PVs: when the claim is deleted,
+  # the PV becomes "Released" and the data is kept for a human to deal with.
+  persistentVolumeReclaimPolicy: Retain
+  # "" = this PV belongs to no StorageClass; only PVCs that also ask for ""
+  # can bind to it.
+  storageClassName: ""
+  volumeMode: Filesystem
+  hostPath:
+    path: /var/lab-static-pv
+    type: DirectoryOrCreate
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: training/zone
+              operator: In
+              values:
+                - zone-a

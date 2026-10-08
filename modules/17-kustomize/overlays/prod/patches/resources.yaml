@@ -1,0 +1,25 @@
+# Strategic-merge patch: looks like a (partial) Deployment, and is MERGED into
+# the matching object. Lists of containers are merged by "name", so only the
+# whoami container's resources change; everything else is kept.
+#
+# Prod gets more resources and spreads its 3 replicas over the two zones
+# (the workers are labelled training/zone=zone-a / zone-b).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+spec:
+  template:
+    spec:
+      containers:
+        - name: whoami
+          resources:
+            requests: { cpu: 20m, memory: 16Mi }
+            limits:   { cpu: 200m, memory: 64Mi }
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: training/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: web

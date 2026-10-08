@@ -1,0 +1,56 @@
+# 07 - Pinning an image by digest, and what imagePullPolicy really does.
+#
+#   kubectl apply -f modules/15-security/07-image-digest.yaml
+#   kubectl -n lab-security get pod pinned -o jsonpath='{.status.containerStatuses[0].imageID}{"\n"}'
+#
+# A TAG is a mutable pointer: whoever controls the repository can push a
+# different image under "nginx:1.27-alpine" tomorrow (rebuilds, or an attacker
+# with stolen registry credentials). A DIGEST (sha256 of the image manifest)
+# is content-addressed: it can only ever mean these exact bytes.
+#
+#   image: nginx:1.27-alpine@sha256:<digest>
+#          ^^^^^^^^^^^^^^^^^ informational only once a digest is present -
+#                            the runtime pulls by digest and ignores the tag.
+#
+# The digest below is the multi-arch "index" digest, so it works on amd64 AND
+# arm64 laptops. Find a digest with any of:
+#   docker buildx imagetools inspect nginx:1.27-alpine
+#   crane digest nginx:1.27-alpine
+#   kubectl get pod <pod> -o jsonpath='{.status.containerStatuses[*].imageID}'
+#
+# imagePullPolicy:
+#   IfNotPresent  pull only if the node doesn't have it. Default for any tag
+#                 except :latest, and for digests.
+#   Always        ask the registry for the current digest on EVERY container
+#                 start (layers are only downloaded if they changed). Default
+#                 for :latest or no tag. Needed in multi-tenant clusters so a
+#                 pod can't reuse a private image another tenant pulled.
+#   Never         only use what is already on the node.
+# Digest + IfNotPresent = reproducible AND fast.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pinned
+  namespace: lab-security
+  labels:
+    app: pinned
+spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 101
+    runAsGroup: 101
+    seccompProfile: { type: RuntimeDefault }
+  automountServiceAccountToken: false
+  containers:
+    - name: app
+      image: nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
+      imagePullPolicy: IfNotPresent
+      command: ["nginx", "-v"]   # just prove the image runs; prints the version and exits
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities: { drop: ["ALL"] }
+      resources:
+        requests: { cpu: 10m, memory: 16Mi }
+        limits:   { cpu: 50m, memory: 32Mi }
+  restartPolicy: Never

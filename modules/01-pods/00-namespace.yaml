@@ -1,0 +1,9 @@
+# Namespace for module 01 (pods). Everything in this module lives here, so
+#   kubectl delete namespace lab-pods
+# cleans up the whole lab.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-pods
+  labels:
+    app: pods

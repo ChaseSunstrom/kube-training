@@ -1,0 +1,42 @@
+# Exercise 1 - solution: a third environment, "staging", built from the same
+# base: 2 replicas, the PDB component, its own name and config.
+#
+#   kubectl kustomize modules/17-kustomize/solutions/staging
+#   kubectl apply -k modules/17-kustomize/solutions/staging
+#   kubectl -n lab-kustomize-staging get deploy,pdb
+#   kubectl delete -k modules/17-kustomize/solutions/staging
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+  - namespace.yaml
+
+components:
+  - ../../components/pdb
+
+namespace: lab-kustomize-staging
+namePrefix: staging-
+
+labels:
+  - pairs:
+      env: staging
+    includeSelectors: false
+    includeTemplates: true
+
+replicas:
+  - name: web
+    count: 2
+
+configMapGenerator:
+  - name: app-config
+    behavior: merge
+    literals:
+      - WHOAMI_NAME=kustomize-staging
+      - FEATURE_SEARCH=on
+
+secretGenerator:
+  - name: app-secret
+    behavior: replace
+    literals:
+      - API_TOKEN=staging-token-not-secret

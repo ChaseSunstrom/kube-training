@@ -1,0 +1,55 @@
+# Solution to exercise 4, step 2 - roll out new config by creating a NEW
+# immutable ConfigMap and pointing the Deployment at it.
+#
+#   kubectl apply -f solutions/04-shop-v2.yaml
+#   kubectl rollout status deploy/shop -n lab-config
+#   kubectl logs -n lab-config -l app=shop --prefix
+#   kubectl rollout undo deploy/shop -n lab-config   # back to v1, instantly
+#
+# Rollback works because feature-flags-v1 still exists: keep the previous
+# version(s) around until you are sure you will not need them.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: feature-flags-v2
+  namespace: lab-config
+  labels:
+    app: shop
+immutable: true
+data:
+  NEW_CHECKOUT: "true"
+  BETA_BANNER: "true"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shop
+  namespace: lab-config
+  labels:
+    app: shop
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: shop
+  template:
+    metadata:
+      labels:
+        app: shop
+    spec:
+      containers:
+        - name: shop
+          image: busybox:1.37
+          command:
+            - sh
+            - -c
+            - |
+              trap 'exit 0' TERM
+              echo "NEW_CHECKOUT=$NEW_CHECKOUT BETA_BANNER=$BETA_BANNER"
+              sleep 3600 & wait $!
+          envFrom:
+            - configMapRef:
+                name: feature-flags-v2     # the only line that changed
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 50m, memory: 32Mi }

@@ -1,0 +1,55 @@
+# Solution 08 - status-page: the readiness probe checked port 8080, nginx
+# listens on 80. The container runs fine (Running), but never becomes Ready
+# (0/1), so the Service has no READY endpoints and the rollout never
+# completes. (A wrong *liveness* probe would be worse: the kubelet would keep
+# killing a healthy container.)
+#
+#   kubectl apply -f modules/16-debugging/solutions/08-readiness-port.yaml
+#   kubectl -n lab-debugging rollout status deploy/status-page
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: status-page
+  namespace: lab-debugging
+  labels:
+    app: status-page
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: status-page
+  template:
+    metadata:
+      labels:
+        app: status-page
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          ports:
+            - name: http
+              containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http          # FIX: was 8080; nginx listens on 80 (named "http")
+            periodSeconds: 5
+            failureThreshold: 2
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 100m, memory: 64Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: status-page
+  namespace: lab-debugging
+  labels:
+    app: status-page
+spec:
+  selector:
+    app: status-page
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

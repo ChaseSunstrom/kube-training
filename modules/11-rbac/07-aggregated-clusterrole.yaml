@@ -1,0 +1,51 @@
+# 07 - Aggregated ClusterRoles: a role assembled from other roles by label.
+#
+# A ClusterRole with an aggregationRule has its rules FILLED IN (and kept up
+# to date) by the controller manager: it is the union of the rules of every
+# ClusterRole whose labels match the selector. Don't edit .rules yourself -
+# the controller overwrites them.
+#
+# The built-in view, edit and admin roles work exactly like this. A CRD author
+# ships a small ClusterRole labelled
+#   rbac.authorization.k8s.io/aggregate-to-view: "true"
+# and everybody who already has "view" can now read the new custom resources.
+# (We don't do that here - it would change the built-in roles for the whole
+# cluster. We use our own label instead.)
+#
+# Look at it after applying:
+#   kubectl get clusterrole lab-rbac-monitoring -o yaml   # rules: is populated
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: lab-rbac-monitoring
+  labels:
+    app: lab-rbac
+aggregationRule:
+  clusterRoleSelectors:
+    - matchLabels:
+        training.example.com/aggregate-to-monitoring: "true"
+rules: []                              # filled in automatically
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: lab-rbac-monitoring-pods
+  labels:
+    app: lab-rbac
+    training.example.com/aggregate-to-monitoring: "true"
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: lab-rbac-monitoring-discovery
+  labels:
+    app: lab-rbac
+    training.example.com/aggregate-to-monitoring: "true"
+rules:
+  - apiGroups: ["discovery.k8s.io"]
+    resources: ["endpointslices"]
+    verbs: ["get", "list", "watch"]

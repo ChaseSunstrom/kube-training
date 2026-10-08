@@ -41,11 +41,24 @@ KC_ARGS=(
 )
 
 # Plain manifests: everything under modules/ and scenarios/ except files that
-# are not Kubernetes objects (Helm charts, Kustomize config, values files).
-mapfile -t FILES < <(
+# are not standalone Kubernetes objects: Helm charts, values files, and
+# anything inside a Kustomize tree (patches are partial objects - those trees
+# are validated below through `kubectl kustomize`).
+mapfile -t KUSTOMIZE_DIRS < <(find modules scenarios -name kustomization.yaml -exec dirname {} \; | sort)
+in_kustomize_tree() {
+  local f="$1" d
+  for d in "${KUSTOMIZE_DIRS[@]}"; do
+    # a kustomization's own dir and everything below it (e.g. patches/)
+    [[ "$f" == "$d/"* ]] && return 0
+  done
+  return 1
+}
+FILES=()
+while IFS= read -r f; do
+  in_kustomize_tree "$f" || FILES+=("$f")
+done < <(
   find modules scenarios -type f \( -name '*.yaml' -o -name '*.yml' \) \
     -not -path '*/chart/*' -not -path '*/charts/*' \
-    -not -name 'kustomization.yaml' -not -name 'kustomization.yml' \
     -not -name 'Chart.yaml' -not -name 'values*.yaml' \
     -not -name '*.kind.yaml' -not -name 'kind-*.yaml' \
     | sort

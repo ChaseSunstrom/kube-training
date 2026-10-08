@@ -1,0 +1,52 @@
+# Solution to exercise 6 - recover the data of a Released (Retain) PV.
+#
+# After step 9 of the lab the lab-retain PV is Released: its claimRef still
+# points at the deleted PVC "precious" (including that PVC's UID), so nothing
+# can bind to it. To give the data a new home:
+#
+#   PV=$(kubectl get pv -o jsonpath='{.items[?(@.spec.claimRef.name=="precious")].metadata.name}')
+#   kubectl patch pv "$PV" --type json -p '[{"op":"remove","path":"/spec/claimRef"}]'
+#   sed "s/REPLACE_WITH_PV_NAME/$PV/" solutions/06-restore-claim.yaml | kubectl apply -f -
+#   kubectl wait -n lab-storage --for=condition=Ready pod/restore-check
+#   kubectl logs -n lab-storage restore-check     # -> very important data
+#
+# The new claim must match the PV: same storageClassName (lab-retain), an
+# access mode the PV offers, and a request no bigger than its capacity.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: restored
+  namespace: lab-storage
+  labels:
+    app: retain-demo
+spec:
+  storageClassName: lab-retain
+  volumeName: REPLACE_WITH_PV_NAME
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: restore-check
+  namespace: lab-storage
+  labels:
+    app: retain-demo
+spec:
+  containers:
+    - name: app
+      image: busybox:1.37
+      command: ["sh", "-c", "cat /data/important.txt; sleep 3600"]
+      volumeMounts:
+        - name: data
+          mountPath: /data
+      resources:
+        requests: { cpu: 10m, memory: 16Mi }
+        limits:   { cpu: 50m, memory: 32Mi }
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: restored

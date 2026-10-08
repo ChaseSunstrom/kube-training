@@ -1,0 +1,36 @@
+# Solution to exercise 6: a high priority that never preempts.
+#
+# preemptionPolicy: Never -> pods of this class are sorted ahead of
+# lower-priority pods in the scheduling queue, but they never evict anybody.
+# They wait for room to free up "naturally" - and then win the race for it.
+# Cluster-scoped: delete with `kubectl delete priorityclass lab-high-polite`.
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: lab-high-polite
+  labels:
+    app: lab-scheduling
+value: 100000
+globalDefault: false
+preemptionPolicy: Never
+description: "Training: high priority in the queue, but never preempts."
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: high-polite
+  namespace: lab-scheduling
+  labels:
+    app: high-polite
+spec:
+  priorityClassName: lab-high-polite
+  terminationGracePeriodSeconds: 5
+  containers:
+    - name: app
+      image: traefik/whoami:v1.10
+      resources:
+        requests: {cpu: 10m, memory: 16Mi}
+        limits:
+          cpu: 50m
+          memory: 32Mi
+          training.example.com/widget: "1"

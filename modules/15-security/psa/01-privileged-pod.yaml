@@ -1,0 +1,39 @@
+# PSA demo 1 - EXPECTED TO BE REJECTED in lab-security-restricted.
+#
+#   kubectl apply -f modules/15-security/psa/01-privileged-pod.yaml
+#
+# This is roughly what a "node agent" or a container-escape exploit wants:
+# privileged mode (all capabilities, all devices, no seccomp/AppArmor), the
+# host's PID and network namespaces, and the node's root filesystem mounted.
+# From inside this pod, `chroot /host` would give you a root shell on the node.
+#
+# "privileged", hostPID, hostNetwork and hostPath already violate the
+# BASELINE level, so it would be rejected in lab-security too. Only a namespace
+# labelled enforce=privileged (or unlabelled, the default) accepts it - which is
+# exactly why you should label your namespaces.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: privileged
+  namespace: lab-security-restricted
+  labels:
+    app: privileged
+spec:
+  hostPID: true
+  hostNetwork: true
+  containers:
+    - name: shell
+      image: busybox:1.37
+      command: ["sh", "-c", "sleep 86400"]
+      securityContext:
+        privileged: true
+      volumeMounts:
+        - name: host-root
+          mountPath: /host
+      resources:
+        requests: { cpu: 10m, memory: 16Mi }
+        limits:   { cpu: 50m, memory: 32Mi }
+  volumes:
+    - name: host-root
+      hostPath:
+        path: /

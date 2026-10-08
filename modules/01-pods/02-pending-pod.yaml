@@ -1,0 +1,31 @@
+# 02 - A Pod that can never be scheduled (phase stays Pending).
+#
+# It asks for 64 CPUs. No node in a laptop cluster has that much
+# *allocatable* CPU, so the scheduler keeps it Pending and records why.
+#
+#   kubectl apply -f modules/01-pods/02-pending-pod.yaml
+#   kubectl get pod too-big -n lab-pods                 # STATUS Pending, forever
+#   kubectl describe pod too-big -n lab-pods | tail -5  # FailedScheduling: ... Insufficient cpu
+#
+# "Pending" means "accepted by the API server, but not all containers are
+# running yet" - waiting for a node, pulling an image, or running init
+# containers. Always read the Events to find out which.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: too-big
+  namespace: lab-pods
+  labels:
+    app: too-big
+spec:
+  containers:
+    - name: app
+      image: busybox:1.37
+      command: ["sleep", "3600"]
+      resources:
+        requests:
+          cpu: "64"             # 64 whole cores
+          memory: 16Mi
+        limits:
+          cpu: "64"
+          memory: 16Mi

@@ -1,0 +1,45 @@
+# A tiny Deployment, used in the Lab to watch how ONE `kubectl apply` fans
+# out into work done by several independent components:
+#
+#   kubectl apply -f modules/00-setup/02-hello-deployment.yaml
+#   kubectl get events -n lab-setup --sort-by=.metadata.creationTimestamp
+#
+#   you --kubectl apply--> kube-apiserver --stores--> etcd
+#     deployment controller  sees the Deployment  -> creates a ReplicaSet
+#     replicaset controller  sees the ReplicaSet  -> creates 2 Pods (no node yet)
+#     kube-scheduler         sees unscheduled Pods -> picks a node for each
+#     kubelet (on that node) sees its new Pod      -> asks containerd to pull + run it
+#
+# Nobody calls anybody: every component WATCHES the API server and reacts.
+# Module 03 covers Deployments properly; here we only use one to watch the flow.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hello
+  namespace: lab-setup
+  labels:
+    app: hello-deploy
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: hello-deploy        # which Pods this Deployment owns...
+  template:
+    metadata:
+      labels:
+        app: hello-deploy      # ...so the template must carry the same label
+    spec:
+      containers:
+        - name: whoami
+          # traefik/whoami answers HTTP requests with its own pod name and IP.
+          image: traefik/whoami:v1.10
+          ports:
+            - name: http
+              containerPort: 80
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 32Mi

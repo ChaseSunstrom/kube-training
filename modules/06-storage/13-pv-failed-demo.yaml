@@ -1,0 +1,42 @@
+# 13 - How a PV ends up in the "Failed" phase.
+#
+# Failed means "the reclaim policy could not be carried out". This PV asks
+# for reclaimPolicy: Delete, but the hostPath volume plugin can only delete
+# paths under /tmp (it is a test-only feature). When the claim is deleted,
+# the PV controller tries, fails and marks the PV Failed, with the event:
+#   host_path deleter only supports /tmp/.+ but received provided /var/lab-failed-pv
+# A Failed PV needs a human: fix or clean up the storage, then delete the PV.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: lab-failed-pv
+  labels:
+    app: failed-demo
+spec:
+  capacity:
+    storage: 100Mi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Delete
+  storageClassName: ""
+  hostPath:
+    path: /var/lab-failed-pv
+    type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: doomed
+  namespace: lab-storage
+  labels:
+    app: failed-demo
+spec:
+  storageClassName: ""
+  selector:
+    matchLabels:
+      app: failed-demo
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Mi

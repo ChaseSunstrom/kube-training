@@ -1,0 +1,44 @@
+# Exercise 3 - reference solution.
+#
+# Generated with:
+#   kubectl create deployment web --image=nginx:1.27-alpine --replicas=3 \
+#     -n lab-setup --dry-run=client -o yaml > web.yaml
+# then cleaned up (creationTimestamp/status/resources: {} removed) and given
+# requests/limits. Check and apply:
+#   kubectl diff  -f modules/00-setup/solutions/ex3-web-deployment.yaml
+#   kubectl apply -f modules/00-setup/solutions/ex3-web-deployment.yaml
+#   kubectl get pods -n lab-setup -l app=web -o wide
+#
+# With 3 replicas and 2 schedulable workers you will usually see a 2/1 split:
+# the scheduler's default scoring spreads pods of the same ReplicaSet across
+# nodes. It is a preference, not a guarantee - module 10 shows how to require it.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: lab-setup
+  labels:
+    app: web
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          ports:
+            - name: http
+              containerPort: 80
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi

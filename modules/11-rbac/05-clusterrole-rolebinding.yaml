@@ -1,0 +1,60 @@
+# 05 - Reusing a ClusterRole inside ONE namespace with a RoleBinding.
+#
+# A ClusterRole is a cluster-scoped list of rules. What it grants depends on
+# how it is BOUND:
+#
+#   RoleBinding  -> ClusterRole : the rules apply only in the RoleBinding's
+#                                 namespace  (this file)
+#   ClusterRoleBinding -> ClusterRole : the rules apply in every namespace and
+#                                 to cluster-scoped resources (06)
+#
+# Write a role once as a ClusterRole, then hand it out per namespace with
+# RoleBindings - that's how the built-in view / edit / admin roles are meant
+# to be used.
+#
+# Two bindings in lab-rbac:
+#   config-reader -> lab-rbac-configmap-reader (our own ClusterRole)
+#   viewer        -> view (built-in: read almost everything EXCEPT Secrets,
+#                    Roles and RoleBindings)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: lab-rbac-configmap-reader      # cluster-scoped -> lab- prefix
+  labels:
+    app: lab-rbac
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: config-reader-reads-configmaps
+  namespace: lab-rbac                  # <- the ONLY namespace where it applies
+  labels:
+    app: config-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole                    # a RoleBinding may reference a ClusterRole
+  name: lab-rbac-configmap-reader
+subjects:
+  - kind: ServiceAccount
+    name: config-reader
+    namespace: lab-rbac
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: viewer-is-view
+  namespace: lab-rbac
+  labels:
+    app: viewer
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+  - kind: ServiceAccount
+    name: viewer
+    namespace: lab-rbac

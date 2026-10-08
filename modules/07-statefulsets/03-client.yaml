@@ -1,0 +1,19 @@
+# 03 - A small client pod to test DNS and HTTP from inside the cluster.
+#
+#   kubectl exec -n lab-statefulsets client -- nslookup web-0.web
+#   kubectl exec -n lab-statefulsets client -- wget -qO- http://web-1.web
+apiVersion: v1
+kind: Pod
+metadata:
+  name: client
+  namespace: lab-statefulsets
+  labels:
+    app: client
+spec:
+  containers:
+    - name: client
+      image: busybox:1.37
+      command: ["sh", "-c", "trap 'exit 0' TERM; sleep 36000 & wait $!"]
+      resources:
+        requests: { cpu: 10m, memory: 16Mi }
+        limits:   { cpu: 50m, memory: 32Mi }

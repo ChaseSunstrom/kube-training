@@ -1,0 +1,37 @@
+# PSA demo 3 - the classic surprise: the Deployment is ACCEPTED (with a
+# warning), but its pods are not.
+#
+#   kubectl apply -f modules/15-security/psa/03-noncompliant-deployment.yaml
+#   kubectl -n lab-security-restricted get deploy,rs,pods -l app=sneaky
+#   kubectl -n lab-security-restricted get events --field-selector reason=FailedCreate
+#
+# PSA "enforce" only checks Pods. "warn" and "audit" also check the pod
+# templates inside Deployments/StatefulSets/Jobs/..., which is why you get a
+# warning at apply time - but the Deployment object itself is stored. Its
+# ReplicaSet then tries to create pods and is rejected every time, so you see
+# READY 0/1 and FailedCreate events on the ReplicaSet, not on any pod.
+# Always set warn= alongside enforce= so humans see the problem early.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sneaky
+  namespace: lab-security-restricted
+  labels:
+    app: sneaky
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sneaky
+  template:
+    metadata:
+      labels:
+        app: sneaky
+    spec:
+      containers:
+        - name: app
+          image: busybox:1.37
+          command: ["sh", "-c", "sleep 86400"]
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 50m, memory: 32Mi }

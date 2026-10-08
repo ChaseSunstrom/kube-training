@@ -1,0 +1,67 @@
+# 01 - emptyDir: scratch space that lives exactly as long as the POD.
+#
+# An emptyDir is created empty when the pod is scheduled to a node and is
+# deleted when the pod is removed from that node. It survives CONTAINER
+# restarts (crash, OOMKill, liveness failure) but not pod deletion,
+# rescheduling or eviction. Typical uses: sharing files between containers of
+# one pod, caches, sort/merge scratch space.
+#
+# Two flavours here:
+#   shared  - disk-backed (node's filesystem, usually /var/lib/kubelet).
+#             sizeLimit is enforced by the kubelet's eviction manager: exceed
+#             it and the whole pod is EVICTED (checked periodically, so not
+#             instantly).
+#   cache   - medium: Memory -> a tmpfs (RAM). Very fast, but every byte
+#             counts against the memory limit of the container that writes
+#             it, and the data is lost on node reboot. The tmpfs is sized to
+#             sizeLimit, so writing more fails with "No space left on device".
+apiVersion: v1
+kind: Pod
+metadata:
+  name: emptydir-demo
+  namespace: lab-storage
+  labels:
+    app: emptydir-demo
+spec:
+  containers:
+    # The writer appends a line every 5 seconds to the shared volume.
+    - name: writer
+      image: busybox:1.37
+      command:
+        - sh
+        - -c
+        - |
+          trap 'exit 0' TERM
+          while true; do
+            echo "$(date +%T) hello from the writer" >> /shared/log.txt
+            sleep 5 & wait $!
+          done
+      volumeMounts:
+        - name: shared
+          mountPath: /shared
+        - name: cache
+          mountPath: /cache
+      resources:
+        requests: { cpu: 10m, memory: 32Mi }
+        limits:   { cpu: 100m, memory: 64Mi }
+    # The reader sees the same files: one volume, two mounts.
+    - name: reader
+      image: busybox:1.37
+      # Wait for the writer to create the file (we can't create it ourselves:
+      # this mount is read-only), then follow it.
+      command: ["sh", "-c", "until [ -f /shared/log.txt ]; do sleep 1; done; exec tail -f /shared/log.txt"]
+      volumeMounts:
+        - name: shared
+          mountPath: /shared
+          readOnly: true          # the reader cannot modify the data
+      resources:
+        requests: { cpu: 10m, memory: 16Mi }
+        limits:   { cpu: 50m, memory: 32Mi }
+  volumes:
+    - name: shared
+      emptyDir:
+        sizeLimit: 50Mi
+    - name: cache
+      emptyDir:
+        medium: Memory
+        sizeLimit: 16Mi

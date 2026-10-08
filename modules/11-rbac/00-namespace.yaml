@@ -1,0 +1,11 @@
+# Module 11 - RBAC
+#
+# Namespaced objects live in lab-rbac. This module also creates a few
+# cluster-scoped objects (ClusterRoles, a ClusterRoleBinding), all prefixed
+# lab-rbac-; the README's Cleanup section deletes them.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-rbac
+  labels:
+    app: lab-rbac

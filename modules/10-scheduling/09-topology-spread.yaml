@@ -1,0 +1,100 @@
+# 09 - topologySpreadConstraints: "spread my replicas evenly".
+#
+# Anti-affinity (03) can only say "at most ONE per domain". Topology spread
+# says "the difference between the fullest and the emptiest domain may be at
+# most maxSkew", which works for any number of replicas.
+#
+#   skew = (pods in this domain, after placing me) - (pods in the emptiest domain)
+#
+# Fields:
+#   topologyKey        node label that defines a domain (zone, node, rack...)
+#   maxSkew            allowed imbalance (1 = as even as possible)
+#   whenUnsatisfiable  DoNotSchedule  -> hard rule (pod stays Pending)
+#                      ScheduleAnyway -> soft rule (only affects scoring)
+#   labelSelector      which pods are counted (normally: my own replicas)
+#   matchLabelKeys     extra label KEYS whose values are taken from the
+#                      incoming pod. [pod-template-hash] = "only count pods
+#                      of my own ReplicaSet", so old pods that are being
+#                      replaced during a rolling update don't skew the count.
+#   nodeTaintsPolicy   Honor  -> ignore nodes whose taints I don't tolerate
+#                      Ignore -> (default) count them as (empty) domains!
+#
+# Two Deployments:
+#   spread-zones        4 replicas, hard-spread over training/zone -> 2 + 2
+#   spread-nodes-strict 4 replicas, hard-spread over kubernetes.io/hostname.
+#                       Looks harmless, but the tainted control-plane node
+#                       ALSO has a hostname label. With the default
+#                       nodeTaintsPolicy: Ignore it counts as a domain with 0
+#                       pods, so after 1 + 1 on the workers every further pod
+#                       would create skew 2 -> 2 replicas stay Pending.
+#                       The lab fixes it with nodeTaintsPolicy: Honor.
+#
+# Nodes WITHOUT the topologyKey label (e.g. the control-plane has no
+# training/zone label) are never part of the spread calculation and
+# pods with a DoNotSchedule constraint on that key won't be placed there.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spread-zones
+  namespace: lab-scheduling
+  labels:
+    app: spread-zones
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: spread-zones
+  template:
+    metadata:
+      labels:
+        app: spread-zones
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: training/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: spread-zones
+          matchLabelKeys:
+            - pod-template-hash      # count only pods of the same ReplicaSet
+      containers:
+        - name: app
+          image: traefik/whoami:v1.10
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 50m, memory: 32Mi}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spread-nodes-strict
+  namespace: lab-scheduling
+  labels:
+    app: spread-nodes-strict
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: spread-nodes-strict
+  template:
+    metadata:
+      labels:
+        app: spread-nodes-strict
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: spread-nodes-strict
+          matchLabelKeys:
+            - pod-template-hash
+          # nodeTaintsPolicy: Honor   # <- the fix; uncomment in lab step 8
+      containers:
+        - name: app
+          image: traefik/whoami:v1.10
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 50m, memory: 32Mi}
