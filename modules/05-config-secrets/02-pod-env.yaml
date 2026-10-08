@@ -57,10 +57,12 @@ spec:
               fieldPath: spec.nodeName
       envFrom:
         # 2. Every key of app-config becomes a variable, prefixed with CFG_.
-        #    Note: "app.properties" becomes CFG_app.properties. Current
-        #    Kubernetes accepts such names (RelaxedEnvironmentVariableValidation);
-        #    older clusters SKIPPED keys that were not valid C identifiers and
-        #    emitted an InvalidEnvironmentVariableNames event instead.
+        #    Note: "app.properties" becomes CFG_app.properties. Kubernetes
+        #    accepts dots and dashes in env var names (older clusters only
+        #    SKIPPED keys starting with a digit, with an
+        #    InvalidEnvironmentVariableNames event; with
+        #    RelaxedEnvironmentVariableValidation those are accepted too), but
+        #    a shell can't expand $CFG_app.properties.
         #    Lesson: keep ConfigMaps used with envFrom to env-style keys only.
         - prefix: CFG_
           configMapRef:

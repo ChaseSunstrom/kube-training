@@ -1,8 +1,9 @@
 # 13 - OOMKilled: what happens when a container exceeds its memory limit.
 #
 # The memory limit becomes a cgroup limit. When the processes in the
-# container try to use more, the kernel's OOM killer kills one (SIGKILL,
-# no chance to clean up). The kubelet reports reason OOMKilled, exit code
+# container try to use more, the kernel's OOM killer SIGKILLs them (no
+# chance to clean up; on cgroup v2 the kubelet sets memory.oom.group, so the
+# whole container is killed, not just one process). The kubelet reports reason OOMKilled, exit code
 # 137 (= 128 + 9, i.e. "killed by signal 9"), and restarts the container
 # according to restartPolicy - so you get OOMKilled -> CrashLoopBackOff.
 #

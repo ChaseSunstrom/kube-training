@@ -3,9 +3,9 @@
 #  the kind cluster maps host port 80 to the control-plane node where the
 #  ingress controller from module 12 listens.)
 #
-# ingressClassName must match the controller you installed in module 12
-# (`kubectl get ingressclass`). The lab overlay sets it in ONE place - see
-# overlays/lab/kustomization.yaml.
+# ingressClassName must match the controller you installed in module 12:
+# lab-traefik, the IngressClass of its Traefik (`kubectl get ingressclass`).
+# The lab overlay sets it in ONE place - see overlays/lab/kustomization.yaml.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -14,7 +14,7 @@ metadata:
   labels:
     app: frontend
 spec:
-  ingressClassName: nginx
+  ingressClassName: lab-traefik
   rules:
     - host: capstone.localtest.me
       http:

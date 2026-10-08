@@ -7,6 +7,10 @@
 # but updates arrive) - and nginx still needs "nginx -s reload" (or a pod
 # restart) to re-read its config either way.
 #
+# This is the finished version, with default_type already added. Without that
+# line nginx answers /healthz with Content-Type: application/octet-stream
+# (the default from the image's nginx.conf).
+#
 #   kubectl apply -f solutions/03-nginx-custom-conf.yaml
 #   kubectl rollout status deploy/nginx-custom -n lab-config
 #   kubectl exec -n lab-config deploy/nginx-custom -- wget -qSO- localhost:8080/healthz

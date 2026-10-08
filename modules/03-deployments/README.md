@@ -239,8 +239,8 @@ web-59d8fd8786   4         4         4       24s
 web-5f8495899    0         0         0       47s
 ```
 
-Terminal 2: v1 and v2 answers mixed for ~25 seconds, then only v2 – and not
-a single `FAILED`:
+Terminal 2: v1 and v2 answers mixed for ~25 seconds, then only v2 – and
+(almost always) no `FAILED`:
 
 ```
 10:44:59 Name: v1
@@ -249,6 +249,14 @@ a single `FAILED`:
 ...
 10:45:21 Name: v2
 ```
+
+An occasional single `FAILED` right as an old pod stops is the classic
+shutdown race: the pod gets SIGTERM at the same moment it is removed from the
+Service's EndpointSlice, and kube-proxy on every node needs a moment to stop
+sending it traffic. `whoami` exits on SIGTERM immediately, so a request
+already routed to it can fail. The usual fix is a short `preStop` delay
+(`lifecycle.preStop.sleep`) so the pod keeps serving while it is taken out of
+rotation — see graceful termination in [module 01](../01-pods/README.md).
 
 During a rolling update **two versions serve traffic at the same time**.
 Your app (and its API, database schema, cache format) must tolerate that –
@@ -549,8 +557,10 @@ and only a fifth of requests were ever affected. If it is good, promote it
 
 1. **Imperative rollout + targeted rollback.** Without editing files, change
    `web`'s `WHOAMI_NAME` to `v7` with `kubectl set env`, record a
-   change-cause with `kubectl annotate`, then roll back to the revision whose
-   change-cause is `v2: new greeting` using `--to-revision`.
+   change-cause with `kubectl annotate`, then roll back to the **most recent**
+   revision whose change-cause is `v2: new greeting` using `--to-revision`
+   (after the lab, more than one revision carries that text — the history
+   lists the latest one last).
    *Hint:* `kubectl rollout history deployment/web -n lab-deployments` first; revision numbers change on every undo.
 
 2. **Trade-offs of the rollout knobs.** Predict, then observe with
@@ -571,8 +581,13 @@ and only a fifth of requests were ever affected. If it is good, promote it
    short outage, because nothing protected availability. Never "fix" things by
    deleting ReplicaSets. (b) The ReplicaSets and pods keep running, with no
    `ownerReferences`. The re-created Deployment **adopts** every ReplicaSet its
-   selector matches; one of them has exactly the same template hash, so it
-   becomes the current one and no pod restarts (compare the AGE column).
+   selector matches. If one of them has exactly the same template hash as the
+   file, it becomes the current one and no pod restarts (compare the AGE
+   column). But if the running pods came from `kubectl rollout restart`
+   (step 5) or a rollback to such a revision, their template also carries the
+   `restartedAt` annotation, which the file does not have: the new Deployment
+   then rolls over (a normal rolling update, new pods) to the ReplicaSet of
+   the plain v2 template – `web-59d8fd8786`, if it is still in the history.
    </details>
 
 4. **History limit.** Set `revisionHistoryLimit: 1` on `web` (patch or edit),

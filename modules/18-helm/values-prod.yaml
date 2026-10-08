@@ -30,5 +30,5 @@ affinity:
 
 ingress:
   enabled: true
-  className: nginx            # module 12's ingress-nginx; any IngressClass works
+  className: lab-traefik      # module 12's Traefik; any IngressClass works
   host: webapp.localtest.me

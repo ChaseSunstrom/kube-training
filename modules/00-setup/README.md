@@ -156,16 +156,28 @@ curl -LO "https://dl.k8s.io/release/v1.37.1/bin/linux/amd64/kubectl.sha256"
 echo "$(cat kubectl.sha256)  kubectl" | sha256sum --check      # must print: kubectl: OK
 sudo install -m 0755 kubectl /usr/local/bin/kubectl && rm kubectl kubectl.sha256
 
-# --- kind
+# --- kind (kind-linux-arm64 on ARM machines)
 curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.33.0/kind-linux-amd64
 sudo install -m 0755 kind /usr/local/bin/kind && rm kind
 ```
 
-Kubernetes 1.37 expects a **cgroup v2** host – recent kubelets refuse to
-start on cgroup v1 by default, and kind warns that cgroup v1 support is going
-away. Check with `stat -fc %T /sys/fs/cgroup/`: it must print `cgroup2fs`
-(all current distributions do; very old ones such as Ubuntu 20.04 or
-CentOS 7 print `tmpfs` and need an upgrade).
+Use a **cgroup v2** host. Since Kubernetes 1.35 the kubelet refuses to
+start on cgroup v1 by default (its `failCgroupV1` setting defaults to
+`true`), and kind warns that cgroup v1 will not be supported in a future kind
+release. Check with `stat -fc %T /sys/fs/cgroup/`: `cgroup2fs` means
+cgroup v2, the default on current distributions. `tmpfs` means cgroup v1 –
+the default on older ones such as Ubuntu 20.04, CentOS 7 or RHEL 8: upgrade,
+or switch the host to cgroup v2 (on systemd distributions, boot with
+`systemd.unified_cgroup_hierarchy=1`). If you must stay on cgroup v1 for now,
+add this at the top level of a *copy* of the cluster config so the kubelet
+starts anyway (a stopgap – cgroup v1 is deprecated):
+
+```yaml
+kubeadmConfigPatches:
+  - |
+    kind: KubeletConfiguration
+    failCgroupV1: false
+```
 
 Multi-node kind clusters on Linux can hit the default inotify limits
 (symptom: pods fail with "too many open files"). Raise them once:
@@ -195,7 +207,8 @@ chmod +x kubectl && sudo mv kubectl /usr/local/bin/kubectl
 #      cluster is within one minor version of it)
 
 # --- kind
-brew install kind        # or: curl -Lo kind https://kind.sigs.k8s.io/dl/v0.33.0/kind-darwin-arm64
+brew install kind        # newest kind; or pinned (Intel: kind-darwin-amd64):
+# curl -Lo kind https://kind.sigs.k8s.io/dl/v0.33.0/kind-darwin-arm64 && chmod +x kind && sudo mv kind /usr/local/bin/kind
 ```
 </details>
 

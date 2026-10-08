@@ -6,7 +6,9 @@
 #   * give an external dependency a cluster-local name, so apps use
 #     `db` today and you can move the DB into the cluster later without
 #     changing app config (externalName: mydb.abc123.eu-west-1.rds.amazonaws.com);
-#   * alias a Service in another namespace (this example).
+#   * alias another Service by its full DNS name - typically one in another
+#     namespace (this example aliases `whoami` in the same namespace, to keep
+#     the lab self-contained).
 #
 # Caveats: it only works for DNS-based clients; HTTP Host headers and TLS
 # SNI still carry the alias name, which external servers may reject; and

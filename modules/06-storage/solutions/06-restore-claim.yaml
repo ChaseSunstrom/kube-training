@@ -1,6 +1,6 @@
 # Solution to exercise 6 - recover the data of a Released (Retain) PV.
 #
-# After step 9 of the lab the lab-retain PV is Released: its claimRef still
+# After step 8 of the lab the lab-retain PV is Released: its claimRef still
 # points at the deleted PVC "precious" (including that PVC's UID), so nothing
 # can bind to it. To give the data a new home:
 #

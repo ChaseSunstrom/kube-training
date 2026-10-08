@@ -451,7 +451,7 @@ decision by removing the stale `claimRef`:
 
 ```bash
 kubectl patch pv lab-static-pv --type json -p '[{"op":"remove","path":"/spec/claimRef"}]'
-kubectl get pv lab-static-pv          # Available → Bound within a second
+kubectl get pv lab-static-pv          # Available, then Bound within ~15s (the PV controller's resync)
 kubectl apply -f 05-pod-static.yaml
 kubectl wait -n lab-storage --for=condition=Ready pod/static-user
 kubectl logs -n lab-storage static-user
@@ -569,8 +569,8 @@ docker exec $NODE cat $DIR/important.txt
 
 ```
 pvc-33028e00-659e-46a0-bc25-5b864d3a90e9 on kube-training-worker2 at /var/local-path-provisioner/pvc-33028e00-..._lab-storage_precious
-persistentvolumeclaim "precious" deleted
-pod "retain-user" deleted
+persistentvolumeclaim "precious" deleted from lab-storage namespace
+pod "retain-user" deleted from lab-storage namespace
 NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS     CLAIM                  STORAGECLASS
 pvc-33028e00-659e-46a0-bc25-5b864d3a90e9   100Mi      RWO            Retain           Released   lab-storage/precious   lab-retain
 very important data
@@ -668,7 +668,7 @@ kubectl describe pvc data -n lab-storage | grep -E '^(Status|Finalizers|Used By)
 
 ```
 ["kubernetes.io/pvc-protection"]
-persistentvolumeclaim "data" deleted
+persistentvolumeclaim "data" deleted from lab-storage namespace
 NAME   STATUS        VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS
 data   Terminating   pvc-0dc8c4d7-8c6c-4122-91f5-55e33506c895   200Mi      RWO            standard
 Status:        Terminating (lasts 1s)
@@ -682,7 +682,7 @@ until its last user is gone:
 ```bash
 kubectl delete pod writer -n lab-storage
 kubectl get pvc data -n lab-storage     # NotFound
-kubectl get pv | grep lab-storage/data  # gone too: class standard uses reclaimPolicy Delete
+kubectl get pv | grep lab-storage/data  # gone a few seconds later: class standard uses reclaimPolicy Delete
 ```
 
 ### 12. A Failed PV

@@ -55,7 +55,8 @@ Maps are merged key by key; **lists are replaced** as a whole. On
 to a *previous* revision are **dropped** unless you pass them again (or use
 `--reuse-values`, which has its own surprises when the chart's defaults
 change - `--reset-then-reuse-values` is usually what you want). The lab
-shows this happening.
+shows this happening. (One exception: an upgrade with no `-f`/`--set` at
+all quietly reuses the previous revision's values.)
 
 `values.schema.json` (JSON Schema) validates the merged values on
 `lint`, `template`, `install` and `upgrade`. Typos in `--set` keys and wrong
@@ -230,7 +231,7 @@ spec:
   replicas: 2
   ...
       annotations:
-        checksum/config: c184b2132844cba7b88bacf8678ef900298ff6d47c9e04f295f924e6e62af294
+        checksum/config: 529ad8543d886418a4500cb411767585dc2acf7f68774a1a0c73fb3000110a67
   ...
           image: "nginx:1.27-alpine"
 ```
@@ -419,12 +420,12 @@ hello-webapp-f776d55b7-5mbrf   1/1     Running   0          2s    10.244.1.104  
 hello-webapp-f776d55b7-5vpxf   1/1     Running   0          5s    10.244.1.102   kube-training-worker2   ...
 hello-webapp-f776d55b7-pdfkx   1/1     Running   0          6s    10.244.3.100   kube-training-worker    ...
 
-NAME           CLASS   HOSTS                 ADDRESS   PORTS   AGE
-hello-webapp   nginx   webapp.localtest.me             80      7s
+NAME           CLASS         HOSTS                 ADDRESS   PORTS   AGE
+hello-webapp   lab-traefik   webapp.localtest.me             80      7s
 ```
 
 Three replicas spread over both zones, and an Ingress (it only gets an
-ADDRESS if an ingress controller runs - [module 12](../12-ingress-gateway/README.md)).
+ADDRESS if module 12's Traefik controller is running - [module 12](../12-ingress-gateway/README.md)).
 Now check the message: `curl` shows **"Hello from PRODUCTION"** - and
 `--set message="Hello again"` from revision 2 is gone. Every upgrade starts
 from the chart defaults plus *this* command's `-f`/`--set`. In real life keep

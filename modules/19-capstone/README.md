@@ -269,25 +269,30 @@ kubectl -n lab-capstone get pods,svc,pvc,ingress
 
 ```
 NAME                           READY   STATUS      RESTARTS   AGE
-pod/backend-558bbc5974-4jj7g   1/1     Running     0          4m54s
-pod/backend-558bbc5974-wt627   1/1     Running     0          4m54s
-pod/db-0                       1/1     Running     0          27s
-pod/db-seed-8d2fw              0/1     Completed   0          4m53s
-pod/frontend-c788d6f46-7qprk   1/1     Running     0          4m54s
-pod/frontend-c788d6f46-v24bt   1/1     Running     0          4m54s
+pod/backend-85bbc87f7b-4pqhq   1/1     Running     0          12s
+pod/backend-85bbc87f7b-rg4d7   1/1     Running     0          12s
+pod/db-0                       1/1     Running     0          12s
+pod/db-seed-w2jdh              0/1     Completed   0          12s
+pod/frontend-c788d6f46-mdr5n   1/1     Running     0          12s
+pod/frontend-c788d6f46-nrkwv   1/1     Running     0          12s
 
-NAME               TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)    AGE
-service/backend    ClusterIP   10.96.41.114   <none>        8080/TCP   4m54s
-service/db         ClusterIP   None           <none>        5432/TCP   4m54s
-service/frontend   ClusterIP   10.96.17.157   <none>        80/TCP     4m54s
+NAME               TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
+service/backend    ClusterIP   10.96.238.171   <none>        8080/TCP   12s
+service/db         ClusterIP   None            <none>        5432/TCP   12s
+service/frontend   ClusterIP   10.96.59.68     <none>        80/TCP     12s
 
-NAME                               STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS
-persistentvolumeclaim/data-db-0    Bound    pvc-50f41027-4b97-456f-950c-77ed9d3651aa   1Gi        RWO            standard
-persistentvolumeclaim/db-backups   Bound    pvc-13cc042a-7ba7-46f6-96b9-807d7d636630   1Gi        RWO            standard
+NAME                               STATUS    VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS
+persistentvolumeclaim/data-db-0    Bound     pvc-3ee0cae1-4e7c-44b2-bf01-6a124a56efb7   1Gi        RWO            standard
+persistentvolumeclaim/db-backups   Pending                                                                        standard
 
-NAME                                 CLASS   HOSTS                   ADDRESS   PORTS   AGE
-ingress.networking.k8s.io/capstone   nginx   capstone.localtest.me             80      4m53s
+NAME                                 CLASS         HOSTS                   ADDRESS     PORTS   AGE
+ingress.networking.k8s.io/capstone   lab-traefik   capstone.localtest.me   localhost   80      12s
 ```
+
+`db-backups` stays `Pending` until the first backup pod uses it - the
+`standard` StorageClass binds on first use (`WaitForFirstConsumer`,
+[module 06](../06-storage/README.md)). The Ingress `ADDRESS` is filled in by
+module 12's Traefik; without a running controller it stays empty.
 
 No PodSecurity warnings appear on apply: every pod passes `restricted`.
 
@@ -332,10 +337,12 @@ curl -s localhost:8080/api/health
 {"db":"up"}
 ```
 
-If you have an ingress controller from [module 12](../12-ingress-gateway/README.md),
-check its class with `kubectl get ingressclass` and set it in
-`solutions/overlays/lab/kustomization.yaml` (the patch at the bottom), then
-open <http://capstone.localtest.me/>.
+The Ingress uses class `lab-traefik`, the IngressClass of the Traefik
+controller from [module 12](../12-ingress-gateway/README.md). With Traefik
+running (module 12, steps 1-2), open <http://capstone.localtest.me/> or
+`curl -s http://capstone.localtest.me/api/items`. Using a different
+controller? Find its class with `kubectl get ingressclass` and change it in
+`solutions/overlays/lab/kustomization.yaml` (the patch at the bottom).
 
 ### 3. Run the checker
 
@@ -424,8 +431,11 @@ Read the comments in the solution files; the key decisions:
   PVC that outlives the pod, never two instances on one data directory. For
   real production data use an operator (e.g. CloudNativePG).
 * **Readiness doesn't depend on the database** (see the last hint).
-* **`maxUnavailable: 0` rolling updates + PDBs + topology spread** - capacity
-  never drops during rollouts, drains, or the loss of one zone.
+* **`maxUnavailable: 0` rolling updates + PDBs + topology spread** - for the
+  frontend and backend, rollouts never reduce capacity, a drain never takes
+  both pods at once, and losing one zone still leaves one of each running.
+  (The single database pod is the exception - that's what replication and
+  operators are for.)
 * **Generated, hashed ConfigMaps** (Kustomize) - editing `api.sh`,
   `default.conf` or `index.html` automatically rolls the right Deployment.
   Two generated objects are deliberately *not* hashed: `db-seed` (a Job's pod

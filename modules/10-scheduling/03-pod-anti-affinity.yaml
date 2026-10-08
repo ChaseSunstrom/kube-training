@@ -15,7 +15,7 @@
 # Required anti-affinity on hostname is how you make sure one node failure
 # can't take out every replica. If you'd rather have "spread if possible, but
 # still run the replica", use preferredDuringScheduling... (weight + podAffinityTerm)
-# or topologySpreadConstraints with whenUnsatisfiable: ScheduleAnyway (08).
+# or topologySpreadConstraints with whenUnsatisfiable: ScheduleAnyway (09).
 #
 # What to look at:
 #   kubectl -n lab-scheduling get pods -l app=web -o wide   -> one per worker

@@ -1,7 +1,9 @@
 # 03 - A small client pod to test DNS and HTTP from inside the cluster.
 #
-#   kubectl exec -n lab-statefulsets client -- nslookup web-0.web
+#   kubectl exec -n lab-statefulsets client -- nslookup web-0.web.lab-statefulsets.svc.cluster.local
 #   kubectl exec -n lab-statefulsets client -- wget -qO- http://web-1.web
+# (busybox nslookup ignores the resolv.conf search path, so give it the full
+# name; wget and normal programs resolve the short form web-1.web.)
 apiVersion: v1
 kind: Pod
 metadata:

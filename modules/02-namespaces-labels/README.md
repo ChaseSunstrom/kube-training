@@ -237,9 +237,11 @@ Annotations:      training/git-commit: 3f9c2a1d4e5b6f708192a3b4c5d6e7f8091a2b3c
 Status:           Running
 ```
 
-A URL or a 40-character hash could never be a label value (`/` and `:` are
-not allowed, and values are limited to 63 characters); as annotations they
-are fine. And you cannot select on them – `-l training/runbook` finds nothing.
+A URL could never be a label value (`/` and `:` are not allowed, and values
+are limited to 63 characters); as an annotation it is fine. (The 40-character
+commit hash *would* be a valid label value – it is an annotation because
+nothing needs to select on it.) And you cannot select on annotations –
+`-l training/runbook` finds nothing.
 
 ### 4. Selectors link objects: quarantine a pod
 

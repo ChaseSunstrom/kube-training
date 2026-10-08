@@ -25,6 +25,8 @@
       }
     },
     "message": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "nameOverride": { "type": "string" },
+    "fullnameOverride": { "type": "string" },
     "service": {
       "type": "object",
       "additionalProperties": false,

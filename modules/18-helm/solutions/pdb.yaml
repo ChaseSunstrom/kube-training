@@ -21,8 +21,13 @@ Exercise 1 - solution: an optional PodDisruptionBudget for the webapp chart.
        }
      }
 
-4. helm lint chart && helm upgrade hello ./chart -n lab-helm --reuse-values --set pdb.enabled=true
+4. helm lint chart && helm upgrade hello ./chart -n lab-helm --reset-then-reuse-values --set pdb.enabled=true
    kubectl -n lab-helm get pdb
+
+   Not --reuse-values: it keeps the OLD chart's defaults, so the new
+   pdb.maxUnavailable default is missing and you get a PDB with no
+   maxUnavailable at all (MAX UNAVAILABLE N/A, ALLOWED DISRUPTIONS 0) - the
+   README's "--reuse-values trap".
 
 The guard `gt (int .Values.replicaCount) 1` avoids a PDB that would block
 node drains forever for a single replica.

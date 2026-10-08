@@ -140,7 +140,8 @@ being valid against the Kubernetes API.
 You will meet these in production. This module only names them:
 
 * **Encryption at rest.** By default the API server stores Secrets in etcd
-  base64-encoded, not encrypted. Cluster admins configure an
+  unencrypted: the values sit there as plain bytes (base64 is only how the
+  API presents them). Cluster admins configure an
   `EncryptionConfiguration` on the API server, ideally with a **KMS v2**
   provider (cloud KMS, Vault), so that etcd and its backups hold ciphertext.
   Managed clusters (EKS/GKE/AKS) offer this as a setting.
@@ -278,10 +279,12 @@ What happened:
 * `envFrom` imported every key with the `CFG_` prefix, including
   `app.properties`, which became a multi-line variable with a dot in its name
   (`kubectl exec -n lab-config env-demo -- printenv CFG_app.properties`).
-  Current Kubernetes (including the 1.37 this course targets) accepts such
-  names. Older versions skipped them with an
-  `InvalidEnvironmentVariableNames` event. Either way, keep `envFrom`
-  ConfigMaps to env-style keys.
+  Kubernetes has long allowed `.` and `-` in variable names; older versions
+  only skipped keys starting with a digit (with an
+  `InvalidEnvironmentVariableNames` event), and current ones, including the
+  1.37 this course targets, accept those too. Your shell can't expand
+  `$CFG_app.properties`, though, so keep `envFrom` ConfigMaps to env-style
+  keys.
 * `POD_NAME` and `NODE_NAME` came from the **Downward API** (`fieldRef`).
 
 ### 5. Consume it as files

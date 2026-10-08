@@ -10,7 +10,7 @@
 # afterwards, never added. While gated you may still tighten the pod's
 # scheduling constraints (e.g. add nodeSelector / node affinity terms).
 #
-# Release it (lab step 12):
+# Release it (lab step 11):
 #   kubectl -n lab-scheduling patch pod gated --type=json \
 #     -p '[{"op":"remove","path":"/spec/schedulingGates"}]'
 apiVersion: v1

@@ -40,10 +40,11 @@ images:
 
 patches:
   # The one place to set your ingress controller's class (kubectl get ingressclass).
+  # lab-traefik = module 12's Traefik; change it if you use another controller.
   - target:
       kind: Ingress
       name: capstone
     patch: |-
       - op: replace
         path: /spec/ingressClassName
-        value: nginx
+        value: lab-traefik

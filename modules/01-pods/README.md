@@ -65,7 +65,9 @@ The STATUS column shows the most interesting of these: e.g. `Init:1/2`,
 
 ### restartPolicy
 
-Pod-level, applies to all regular containers:
+Pod-level, applies to all regular containers (a container *can* override it
+with its own `restartPolicy`/`restartPolicyRules` – a newer feature, beta and
+on by default in 1.37, not used in this course):
 
 | restartPolicy | Container exits 0 | Container exits non-zero | Pod can end as |
 |---|---|---|---|
@@ -99,9 +101,15 @@ still starting).
 
 | QoS class | Rule | Under node memory pressure |
 |---|---|---|
-| `Guaranteed` | every container has CPU **and** memory limits, and requests = limits | evicted last |
+| `Guaranteed` | every container (init containers too) has CPU **and** memory limits, with requests = limits for both | evicted last |
 | `Burstable` | anything in between | evicted after BestEffort, roughly by how far usage exceeds requests |
 | `BestEffort` | no requests or limits on any container | evicted first |
+
+The "evicted first/last" column is the usual rule of thumb. Precisely, the
+kubelet ranks pods by (1) whether their usage exceeds their requests, (2) pod
+priority, then (3) how far usage exceeds requests — which works out to the
+QoS order above in practice, since BestEffort pods have no requests at all
+and Guaranteed pods can't exceed theirs.
 
 ### What happens on delete
 

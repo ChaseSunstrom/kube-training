@@ -284,7 +284,7 @@ kubectl exec -n lab-statefulsets client -- wget -qO- http://web-1.web
 ```
 NAME    UID                                    IP           NODE
 web-1   36652a4a-4353-448d-aa4f-b1c0fff0c618   10.244.1.6   kube-training-worker2
-pod "web-1" deleted
+pod "web-1" deleted from lab-statefulsets namespace
 pod/web-1 condition met
 NAME    UID                                    IP           NODE
 web-1   804c9eb0-c4f3-4ba8-aa75-10795d963eb8   10.244.1.9   kube-training-worker2
@@ -519,8 +519,11 @@ scale-down in step 5.
 
 4. **Redis that remembers.** Run a single Redis (`redis:7.4-alpine`) as a
    StatefulSet with a 100Mi volume. Write a key, delete the pod, read the key.
-   What does Redis need to be told so that the data really is on the volume?
-   *Hint:* `--appendonly yes`; the image's data directory is `/data`.
+   What does Redis need to be told so that *every* write really is on the volume?
+   *Hint:* by default Redis only saves snapshots now and then and on a clean
+   shutdown, so a plain pod delete keeps the key. Simulate a crash with
+   `redis-cli shutdown nosave` to see what you would lose. The fix is
+   `--appendonly yes`; the image's data directory is `/data`.
    Solution: [`solutions/04-redis-statefulset.yaml`](solutions/04-redis-statefulset.yaml).
 
 5. **Faster updates.** Make `fast` (4 replicas) update two pods at a time.

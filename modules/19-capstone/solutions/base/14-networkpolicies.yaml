@@ -45,9 +45,9 @@ spec:
         - { protocol: TCP, port: 53 }
 ---
 # 3. Frontend: reachable on 8080 from the ingress controller; may call the backend.
-#    The controller's namespace depends on what you installed in module 12,
-#    so this allows any namespace. Tighten it once you know, e.g.
-#      namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: ingress-nginx } }
+#    The controller's namespace depends on what you installed, so this allows
+#    any namespace. Tighten it once you know - for module 12's Traefik:
+#      namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: lab-ingress } }
 #    (A controller running with hostNetwork: true connects from the NODE's IP,
 #     which no pod/namespace selector matches - you'd need an ipBlock for the
 #     node addresses. Controllers using hostPort, like kind's usual setup, are fine.)

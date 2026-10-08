@@ -1,7 +1,7 @@
 # 04 - podManagementPolicy: Parallel.
 #
-# Same stable names and DNS, but the controller does NOT wait for web-0 to be
-# Ready before creating web-1: all pods are created (and on scale-down,
+# Same stable names and DNS, but the controller does NOT wait for fast-0 to be
+# Ready before creating fast-1: all pods are created (and on scale-down,
 # deleted) at once. Use it when your pods don't need to start in order - e.g.
 # a sharded cache where each member finds the others via DNS - and you want
 # faster scaling.

@@ -230,6 +230,8 @@ fi
 section "11. Data survives a database pod restart"
 if [ "${SKIP_PERSISTENCE:-0}" = 1 ]; then
   warn "skipped (SKIP_PERSISTENCE=1)"
+elif ! k get pod db-0 >/dev/null 2>&1; then
+  fail "pod db-0 not found - nothing to restart"
 else
   uid_before=$(k get pod db-0 -o jsonpath='{.metadata.uid}')
   k delete pod db-0 --wait=true >/dev/null 2>&1

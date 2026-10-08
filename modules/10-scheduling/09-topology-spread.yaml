@@ -91,7 +91,7 @@ spec:
               app: spread-nodes-strict
           matchLabelKeys:
             - pod-template-hash
-          # nodeTaintsPolicy: Honor   # <- the fix; uncomment in lab step 8
+          # nodeTaintsPolicy: Honor   # <- the fix; lab step 9 adds it with kubectl patch
       containers:
         - name: app
           image: traefik/whoami:v1.10

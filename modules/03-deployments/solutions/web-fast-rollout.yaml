@@ -32,7 +32,7 @@ spec:
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      # During a rollout, at most replicas + maxSurge pods exist (here 5)...
+      # During a rollout, at most replicas + maxSurge pods exist (here 4 + 4 = 8)...
       maxSurge: "100%"           # was 1
       # ...and at least replicas - maxUnavailable are available (here 4).
       # 0 = never go below full capacity: the safest setting for a web app,

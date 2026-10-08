@@ -22,7 +22,7 @@ service:
 
 ingress:
   enabled: false
-  className: ""               # e.g. "nginx" - empty = the cluster's default IngressClass
+  className: ""               # e.g. "lab-traefik" (module 12) - empty = the cluster's default IngressClass
   host: webapp.localtest.me   # *.localtest.me resolves to 127.0.0.1
 
 serviceAccount:

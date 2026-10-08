@@ -1,9 +1,16 @@
 # Solution to exercise 4 - a single Redis instance whose data survives pod
 # deletion.
 #
-# Redis only writes to disk if you ask it to: --appendonly yes logs every
-# write to /data/appendonly.aof (the redis image's working dir is /data).
-# Without that the PVC would be mounted but empty after a restart.
+# By default Redis keeps data in memory and only writes snapshots
+# (/data/dump.rdb - the redis image's working dir is /data) every few minutes
+# and on a clean shutdown. So a plain `kubectl delete pod` keeps the key even
+# without AOF, but a crash, OOM kill or node failure loses every write since
+# the last snapshot. --appendonly yes logs every write to /data as it happens.
+# Simulate a crash and compare:
+#   kubectl exec -n lab-statefulsets redis-0 -- redis-cli set crash-test 1
+#   kubectl exec -n lab-statefulsets redis-0 -- redis-cli shutdown nosave   # exit without saving
+#   # ... a few seconds later the container has restarted (RESTARTS 1):
+#   kubectl exec -n lab-statefulsets redis-0 -- redis-cli get crash-test   # 1 with AOF, empty without
 #
 #   kubectl apply -f solutions/04-redis-statefulset.yaml
 #   kubectl rollout status sts/redis -n lab-statefulsets
