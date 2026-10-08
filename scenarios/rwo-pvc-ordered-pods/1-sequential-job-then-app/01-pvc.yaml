@@ -1,0 +1,25 @@
+# The ONE volume both pods use.
+#
+# ReadWriteOnce (RWO) means "mountable read-write by a single NODE".
+# It does NOT mean "a single pod": any number of pods on the node that has the
+# volume can mount it at the same time. That is the property every pattern in
+# this scenario relies on, together with pod affinity that keeps all users of
+# the volume on that one node.
+#
+# No storageClassName -> the cluster's default StorageClass is used
+# (`standard` on kind = rancher local-path, volumeBindingMode WaitForFirstConsumer:
+# the PV is only created once the first pod that uses the claim is scheduled,
+# on that pod's node).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: shared-data
+  namespace: lab-rwo-sequential
+  labels:
+    app: shared-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi

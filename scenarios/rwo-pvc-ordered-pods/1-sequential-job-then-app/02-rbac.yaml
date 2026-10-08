@@ -1,0 +1,32 @@
+# Pod B's init containers use kubectl to wait for the seed Job to complete.
+# Talking to the API needs an identity (ServiceAccount) and permission (Role).
+# Least privilege: read-only access to Jobs in this namespace, nothing else.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: web
+  namespace: lab-rwo-sequential
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: job-watcher
+  namespace: lab-rwo-sequential
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch"]   # `kubectl wait` needs all three
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: web-can-watch-jobs
+  namespace: lab-rwo-sequential
+subjects:
+  - kind: ServiceAccount
+    name: web
+    namespace: lab-rwo-sequential
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: job-watcher

@@ -1,0 +1,28 @@
+# ReadWriteOncePod (RWOP, GA since Kubernetes 1.29): only ONE POD in the
+# whole cluster may use this claim at a time. A second pod that references it
+# stays Pending with:
+#   "node(s) unavailable due to PersistentVolumeClaim with ReadWriteOncePod
+#    access mode already in-use by another pod"
+# (older releases word it "node has pod using PersistentVolumeClaim with the
+# same name and ReadWriteOncePod access mode")
+# until the first pod is gone (deleted or finished).
+#
+# Use RWOP when two writers on the same volume would corrupt it (SQLite,
+# many embedded databases, anything without file locking you trust).
+#
+# Support: RWOP needs a CSI driver that supports it (most current cloud and
+# on-prem CSI drivers do). kind's local-path provisioner also accepts it and
+# the scheduler enforces it.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: shared-data
+  namespace: lab-rwo-rwop
+  labels:
+    app: shared-data
+spec:
+  accessModes:
+    - ReadWriteOncePod
+  resources:
+    requests:
+      storage: 1Gi

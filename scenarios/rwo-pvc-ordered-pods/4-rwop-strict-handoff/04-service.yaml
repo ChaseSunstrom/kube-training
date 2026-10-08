@@ -1,0 +1,17 @@
+# Service in front of pod B. Has no endpoints until the hand-off happened
+# and nginx is Ready.
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  namespace: lab-rwo-rwop
+  labels:
+    app: web
+spec:
+  type: ClusterIP
+  selector:
+    app: web
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

@@ -1,0 +1,80 @@
+# BROKEN ON PURPOSE - what happens when two pods that share an RWO claim end
+# up on DIFFERENT nodes.
+#
+#   kubectl apply -f broken/01-rwo-pods-on-different-nodes.yaml
+#   kubectl -n lab-rwo-broken get pods -o wide
+#   kubectl -n lab-rwo-broken describe pod pod-b | tail
+#
+# On kind (local-path storage, the PV lives on ONE node's disk) pod-b stays
+# Pending:
+#   0/3 nodes are available: 1 node(s) didn't match PersistentVolume's node affinity, ...
+#
+# On cloud block storage (EBS, Persistent Disk, Azure Disk, Ceph RBD...) the
+# volume CAN move between nodes but can only be attached to one at a time, so
+# pod-b gets scheduled, then hangs in ContainerCreating with:
+#   Multi-Attach error for volume "pvc-..." Volume is already used by pod(s) pod-a
+#
+# Fix: keep every pod that uses the claim on one node (pod affinity, see the
+# patterns) - or, if they really must be on different nodes, use storage that
+# supports ReadWriteMany (NFS, CephFS, EFS, Azure Files, Filestore...).
+#
+# Cleanup: kubectl delete namespace lab-rwo-broken
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-rwo-broken
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: shared-data
+  namespace: lab-rwo-broken
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-a
+  namespace: lab-rwo-broken
+spec:
+  nodeSelector:
+    training/zone: zone-a       # worker 1 (labels come from cluster/kind-multi-node.yaml)
+  containers:
+    - name: app
+      image: busybox:1.37
+      command: ["sh", "-c", "echo hello from pod-a > /data/hello.txt; sleep 3600"]
+      volumeMounts:
+        - { name: data, mountPath: /data }
+      resources:
+        requests: { cpu: 10m, memory: 16Mi }
+        limits: { cpu: 100m, memory: 32Mi }
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: shared-data
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-b
+  namespace: lab-rwo-broken
+spec:
+  nodeSelector:
+    training/zone: zone-b       # worker 2 - a DIFFERENT node -> conflict
+  containers:
+    - name: app
+      image: busybox:1.37
+      command: ["sh", "-c", "cat /data/hello.txt; sleep 3600"]
+      volumeMounts:
+        - { name: data, mountPath: /data }
+      resources:
+        requests: { cpu: 10m, memory: 16Mi }
+        limits: { cpu: 100m, memory: 32Mi }
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: shared-data

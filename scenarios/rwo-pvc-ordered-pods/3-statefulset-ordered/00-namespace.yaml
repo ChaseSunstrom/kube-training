@@ -1,0 +1,7 @@
+# Pattern 3 - Let Kubernetes do the ordering: a StatefulSet with
+# podManagementPolicy OrderedReady creates pod-1 only after pod-0 is Ready.
+#   kubectl delete namespace lab-rwo-statefulset   # cleanup
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-rwo-statefulset

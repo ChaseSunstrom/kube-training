@@ -1,0 +1,57 @@
+# POD B - the web app, created with replicas: 0.
+#
+# Why not an init container that waits for the Job, like pattern 1?
+# Because with RWOP that can DEADLOCK: if B were scheduled first it would own
+# the claim while waiting for A, and A could never be scheduled to do the
+# work B is waiting for. The fix is to not create B at all until A is done:
+# the seed Job scales this Deployment up as its final step.
+#
+# GitOps / re-apply caveat: `kubectl apply` of this file sets replicas back
+# to 0 (and stops the app). To redeploy, delete and re-create the Job, which
+# scales web up again once it has finished.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: lab-rwo-rwop
+  labels:
+    app: web
+spec:
+  replicas: 0      # scaled to 1 by the seed Job (05-job-seed.yaml)
+  # RWOP + RollingUpdate would leave the new pod Pending until the old one is
+  # gone while the old one is only removed once the new one is Ready -> stuck.
+  # Recreate removes the old pod first.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          ports:
+            - name: http
+              containerPort: 80
+          volumeMounts:
+            - name: data
+              mountPath: /usr/share/nginx/html
+              subPath: www
+              readOnly: true
+          readinessProbe:
+            httpGet: { path: /, port: http }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /, port: http }
+            periodSeconds: 20
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 200m, memory: 64Mi }
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: shared-data

@@ -1,0 +1,102 @@
+# BROKEN ON PURPOSE - pattern 1 (init container waits for the Job) combined
+# with a ReadWriteOncePod claim = DEADLOCK.
+#
+#   kubectl apply -f broken/02-rwop-init-wait-deadlock.yaml   # pod B first...
+#   kubectl -n lab-rwo-deadlock get pods                      # web: Init:0/2, holding the claim
+#   kubectl apply -f broken/03-rwop-deadlock-seed-job.yaml    # ...then pod A
+#   kubectl -n lab-rwo-deadlock get pods          # web: Init:1/2 forever, seed: Pending forever
+#   kubectl -n lab-rwo-deadlock describe pod -l app=seed | tail -3
+#     ... 2 node(s) unavailable due to PersistentVolumeClaim with ReadWriteOncePod access mode already in-use by another pod
+#
+# Why: the web pod was created first, so it was scheduled first and now OWNS
+# the RWOP claim - even though only its init container is running. The seed
+# pod can't be scheduled while web holds the claim, and web is waiting for
+# seed to finish. Neither can make progress.
+#
+# It is a RACE: if you apply both at once and the seed pod happens to be
+# scheduled first, everything works. "Works most of the time" is the worst
+# kind of bug - the patterns in this scenario never depend on who wins.
+#
+# Fix: with RWOP, never create pod B before pod A is done -> pattern 4
+# (A scales B up), or order them from outside the cluster (CI script,
+# Helm hook, Argo CD sync wave).
+#
+# Cleanup: kubectl delete namespace lab-rwo-deadlock
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-rwo-deadlock
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: shared-data
+  namespace: lab-rwo-deadlock
+spec:
+  accessModes: [ReadWriteOncePod]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: web
+  namespace: lab-rwo-deadlock
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: job-watcher
+  namespace: lab-rwo-deadlock
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: web-can-watch-jobs
+  namespace: lab-rwo-deadlock
+subjects:
+  - { kind: ServiceAccount, name: web, namespace: lab-rwo-deadlock }
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: job-watcher
+---
+# Pod B, created FIRST. Pod A (the seed Job) is in 03-rwop-deadlock-seed-job.yaml.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: lab-rwo-deadlock
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: web }
+  template:
+    metadata:
+      labels: { app: web }
+    spec:
+      serviceAccountName: web
+      initContainers:
+        - name: wait-for-seed-job-created
+          image: rancher/kubectl:v1.36.2
+          args: ["wait", "--for=create", "job/seed", "--timeout=10m"]
+        - name: wait-for-seed-job-complete
+          image: rancher/kubectl:v1.36.2
+          args: ["wait", "--for=condition=complete", "job/seed", "--timeout=10m"]
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          volumeMounts:
+            - { name: data, mountPath: /usr/share/nginx/html, readOnly: true }
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 200m, memory: 64Mi }
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: shared-data }

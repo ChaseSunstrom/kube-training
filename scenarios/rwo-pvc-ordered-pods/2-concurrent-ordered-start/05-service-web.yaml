@@ -1,0 +1,18 @@
+# Public-facing Service for pod B.
+#   kubectl -n lab-rwo-concurrent port-forward svc/web 8080:80
+#   curl localhost:8080 ; curl localhost:8080/heartbeat.txt   # grows every 5s
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  namespace: lab-rwo-concurrent
+  labels:
+    app: web
+spec:
+  type: ClusterIP
+  selector:
+    app: web
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

@@ -1,0 +1,16 @@
+# One ReadWriteOnce claim, mounted by two DIFFERENT pods at the SAME time.
+# Legal, because RWO is enforced per node: both pods are kept on one node by
+# the co-location affinity in 02- and 04-.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: shared-data
+  namespace: lab-rwo-concurrent
+  labels:
+    app: shared-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi

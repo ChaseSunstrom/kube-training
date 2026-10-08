@@ -1,0 +1,69 @@
+# Exercise solution: add a THIRD pod (a backup CronJob) to pattern 2.
+#
+# Anything that mounts the RWO claim must join the co-location group,
+# otherwise its pods may be scheduled onto another node (Pending on kind,
+# Multi-Attach error on cloud disks). Two lines do it:
+#   1. label   rwo-group: shared-data
+#   2. the same required podAffinity as the writer and web pods
+#
+# Apply on top of pattern 2:
+#   kubectl apply -f scenarios/rwo-pvc-ordered-pods/2-concurrent-ordered-start/
+#   kubectl apply -f scenarios/rwo-pvc-ordered-pods/solutions/pattern-2-backup-cronjob.yaml
+#   kubectl -n lab-rwo-concurrent create job backup-now --from=cronjob/backup   # don't wait for the schedule
+#   kubectl -n lab-rwo-concurrent logs job/backup-now
+#   kubectl -n lab-rwo-concurrent get pods -o wide      # all on the same node
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: backup
+  namespace: lab-rwo-concurrent
+  labels:
+    app: backup
+spec:
+  schedule: "*/15 * * * *"
+  concurrencyPolicy: Forbid          # never two backups at once
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 3600
+      template:
+        metadata:
+          labels:
+            app: backup
+            rwo-group: shared-data
+        spec:
+          restartPolicy: OnFailure
+          affinity:
+            podAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchLabels:
+                      rwo-group: shared-data
+                  topologyKey: kubernetes.io/hostname
+          containers:
+            - name: backup
+              image: busybox:1.37
+              command:
+                - sh
+                - -c
+                - |
+                  set -eu
+                  mkdir -p /data/backups
+                  f="/data/backups/www-$(date -u +%Y%m%dT%H%M%SZ).tar.gz"
+                  tar -czf "$f" -C /data www
+                  echo "wrote $f ($(wc -c < "$f") bytes)"
+                  # keep the 5 newest backups
+                  ls -1t /data/backups/*.tar.gz | tail -n +6 | xargs -r rm -f
+                  ls -l /data/backups
+              volumeMounts:
+                - name: data
+                  mountPath: /data
+              resources:
+                requests: { cpu: 10m, memory: 16Mi }
+                limits: { cpu: 100m, memory: 32Mi }
+          volumes:
+            - name: data
+              persistentVolumeClaim:
+                claimName: shared-data

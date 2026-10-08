@@ -1,0 +1,79 @@
+# POD A - the "seed" Job. It must run (and finish) BEFORE the web app starts.
+#
+# Real-world equivalents: database migrations, downloading a model or dataset,
+# restoring a backup, generating static content, fixing file ownership.
+#
+# It writes the site into the shared RWO volume and, as its very last step,
+# a marker file. A Job is the right object for "run to completion once":
+# a bare Pod would not be retried, a Deployment would restart it forever.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: seed
+  namespace: lab-rwo-sequential
+  labels:
+    app: seed
+spec:
+  backoffLimit: 3            # retry a failing seed up to 3 times, then mark the Job Failed
+  activeDeadlineSeconds: 600 # give up entirely after 10 minutes
+  # NOTE: no ttlSecondsAfterFinished on purpose. If the finished Job were
+  # garbage-collected, a *new* web pod (e.g. after a node drain) would wait
+  # forever for a Job that no longer exists.
+  template:
+    metadata:
+      labels:
+        app: seed
+        # Every pod that mounts the shared RWO claim carries this label and
+        # requires to be on the same node as any other running pod with it.
+        # See the affinity block below and the scenario README.
+        rwo-group: shared-data
+    spec:
+      # OnFailure retries the container inside the SAME pod, so the pod keeps
+      # its node and its volume mount. (With Never, every retry is a brand-new
+      # pod that has to be scheduled again.)
+      restartPolicy: OnFailure
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  rwo-group: shared-data
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - name: seed
+          image: busybox:1.37
+          env:
+            - name: POD_NAME
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+            - name: NODE_NAME
+              valueFrom: { fieldRef: { fieldPath: spec.nodeName } }
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              echo "$(date -u +%FT%TZ) seed: starting on node ${NODE_NAME}"
+              # Remove the marker first so a half-finished re-run is never
+              # mistaken for a complete one.
+              rm -f /data/.seed-complete
+              mkdir -p /data/www
+              cat > /data/www/index.html <<EOF
+              <h1>Hello from the shared RWO volume</h1>
+              <p>Seeded by pod ${POD_NAME} on node ${NODE_NAME} at $(date -u +%FT%TZ).</p>
+              EOF
+              # Pretend this is slow work (migrations, downloads...) so you
+              # have time to watch pod B sit in Init:1/3.
+              echo "$(date -u +%FT%TZ) seed: doing slow work for 15s..."
+              sleep 15
+              date -u +%FT%TZ > /data/.seed-complete
+              echo "$(date -u +%FT%TZ) seed: done"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 100m, memory: 32Mi }
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: shared-data

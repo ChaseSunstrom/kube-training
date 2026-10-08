@@ -1,0 +1,19 @@
+# ONE claim shared by all StatefulSet replicas.
+#
+# Important: this is a normal, standalone PVC referenced from the pod
+# template's `volumes:`. It is NOT a volumeClaimTemplate - a template would
+# give every replica its OWN volume (data-app-0, data-app-1), which is the
+# usual StatefulSet pattern but not what we want here.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: shared-data
+  namespace: lab-rwo-statefulset
+  labels:
+    app: shared-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi

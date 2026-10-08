@@ -1,0 +1,39 @@
+# Two Services:
+#
+# * app-headless - required by the StatefulSet (spec.serviceName). Gives each
+#   pod a stable DNS name: app-0.app-headless.lab-rwo-statefulset.svc.cluster.local
+#   publishNotReadyAddresses lets peers resolve each other during start-up.
+# * app          - the normal ClusterIP Service clients use; load-balances
+#   across all Ready replicas (both pods serve the shared volume).
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-headless
+  namespace: lab-rwo-statefulset
+  labels:
+    app: ordered
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app: ordered
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: app
+  namespace: lab-rwo-statefulset
+  labels:
+    app: ordered
+spec:
+  type: ClusterIP
+  selector:
+    app: ordered
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

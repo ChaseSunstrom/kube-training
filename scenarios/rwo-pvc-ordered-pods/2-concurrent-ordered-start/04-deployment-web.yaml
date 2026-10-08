@@ -1,0 +1,73 @@
+# POD B - the web server. Starts only after pod A is Ready, then serves the
+# files pod A keeps writing - both pods use the RWO volume concurrently.
+#
+# Ordering mechanism: an init container that polls pod A's Service. No RBAC,
+# no API access, works for any dependency that has a Service (databases,
+# caches, APIs...).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: lab-rwo-concurrent
+  labels:
+    app: web
+spec:
+  replicas: 1   # can be >1: the affinity keeps every replica on the volume's node
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+        rwo-group: shared-data
+    spec:
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  rwo-group: shared-data
+              topologyKey: kubernetes.io/hostname
+      initContainers:
+        - name: wait-for-writer-ready
+          image: busybox:1.37
+          command:
+            - sh
+            - -c
+            - |
+              echo "waiting for pod A (Service writer) to become Ready..."
+              until wget -q -T 2 -O /dev/null http://writer:8080/ready; do
+                echo "$(date -u +%FT%TZ) writer not ready yet"
+                sleep 2
+              done
+              echo "$(date -u +%FT%TZ) writer is Ready - starting web"
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 100m, memory: 32Mi }
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          ports:
+            - name: http
+              containerPort: 80
+          volumeMounts:
+            - name: data
+              mountPath: /usr/share/nginx/html
+              subPath: www
+              readOnly: true
+          readinessProbe:
+            httpGet: { path: /, port: http }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /, port: http }
+            periodSeconds: 20
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 200m, memory: 64Mi }
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: shared-data

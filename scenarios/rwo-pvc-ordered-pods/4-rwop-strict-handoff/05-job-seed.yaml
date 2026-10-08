@@ -1,0 +1,65 @@
+# POD A - the seed Job, and the owner of the hand-off.
+#
+#   init container "seed"     (busybox)  writes the data into the RWOP volume
+#   container      "hand-off" (kubectl)  scales Deployment web 0 -> 1
+#
+# Order is guaranteed by construction: pod B does not exist until pod A has
+# written the data. While pod A is still finishing, the new web pod is
+# Pending (RWOP: the claim is still held by pod A). The moment pod A
+# completes, the scheduler places pod B.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: seed
+  namespace: lab-rwo-rwop
+  labels:
+    app: seed
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      labels:
+        app: seed
+    spec:
+      serviceAccountName: seed
+      restartPolicy: OnFailure
+      initContainers:
+        - name: seed
+          image: busybox:1.37
+          env:
+            - name: POD_NAME
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+            - name: NODE_NAME
+              valueFrom: { fieldRef: { fieldPath: spec.nodeName } }
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              echo "$(date -u +%FT%TZ) seed: I own the RWOP volume, writing data..."
+              mkdir -p /data/www
+              cat > /data/www/index.html <<EOF
+              <h1>ReadWriteOncePod hand-off</h1>
+              <p>Written by ${POD_NAME} on ${NODE_NAME} at $(date -u +%FT%TZ),
+              then handed over to the web pod.</p>
+              EOF
+              sleep 10   # pretend this is slow
+              echo "$(date -u +%FT%TZ) seed: data written"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 100m, memory: 32Mi }
+      containers:
+        - name: hand-off
+          image: rancher/kubectl:v1.36.2   # entrypoint is kubectl
+          args: ["scale", "deployment/web", "--replicas=1"]
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { cpu: 100m, memory: 64Mi }
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: shared-data

@@ -1,0 +1,20 @@
+# downloaded tools (scripts/validate.sh puts kubeconform here)
+.bin/
+
+# helm packaging / dependency artifacts
+*.tgz
+modules/18-helm/chart/charts/
+
+# local kubeconfigs, certs and keys generated during labs
+*.kubeconfig
+kubeconfig
+*.key
+*.crt
+*.csr
+*.pem
+
+# editors / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store

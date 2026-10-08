@@ -1,0 +1,37 @@
+# The seed Job's last step scales the web Deployment from 0 to 1.
+# Least privilege: it may read Deployments and change their scale - nothing
+# else (it cannot edit the pod template, delete things, read Secrets...).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: seed
+  namespace: lab-rwo-rwop
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: deployment-scaler
+  namespace: lab-rwo-rwop
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: ["web"]
+    verbs: ["get"]
+  - apiGroups: ["apps"]
+    resources: ["deployments/scale"]
+    resourceNames: ["web"]
+    verbs: ["get", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: seed-can-scale-web
+  namespace: lab-rwo-rwop
+subjects:
+  - kind: ServiceAccount
+    name: seed
+    namespace: lab-rwo-rwop
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: deployment-scaler

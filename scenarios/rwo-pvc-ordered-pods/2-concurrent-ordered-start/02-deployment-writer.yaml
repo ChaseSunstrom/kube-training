@@ -1,0 +1,106 @@
+# POD A - the writer. Long-running: it initialises the shared volume, then
+# keeps appending a heartbeat line every 5 seconds.
+#
+# "I'm initialised" is expressed the Kubernetes way: through READINESS.
+# The pod only turns Ready after initialisation is finished, and a Service
+# (03-service-writer.yaml) only has endpoints for Ready pods. Pod B waits for
+# that Service to answer, so B can never start before A is ready.
+#
+# Why not a marker file on the shared volume? Because it survives restarts:
+# after a redeploy, B could see the OLD marker and start before the NEW A has
+# initialised. Readiness belongs to the current pod and can't be stale.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: writer
+  namespace: lab-rwo-concurrent
+  labels:
+    app: writer
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate          # never two writers / never a surge pod on another node
+  selector:
+    matchLabels:
+      app: writer
+  template:
+    metadata:
+      labels:
+        app: writer
+        rwo-group: shared-data
+    spec:
+      affinity:
+        podAffinity:
+          # Co-location group: every pod using the claim must run on the node
+          # where another running member of the group already is. The first
+          # member to be scheduled may go anywhere (its own labels satisfy
+          # its own affinity term), the rest follow it.
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  rwo-group: shared-data
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - name: writer
+          image: busybox:1.37
+          env:
+            - name: POD_NAME
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+            - name: NODE_NAME
+              valueFrom: { fieldRef: { fieldPath: spec.nodeName } }
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              echo "$(date -u +%FT%TZ) writer: initialising shared volume on ${NODE_NAME}"
+              mkdir -p /data/www
+              cat > /data/www/index.html <<EOF
+              <h1>Shared RWO volume - concurrent writer + reader</h1>
+              <p>Initialised by ${POD_NAME} on ${NODE_NAME} at $(date -u +%FT%TZ).</p>
+              <p>Live heartbeats from the writer: <a href="heartbeat.txt">heartbeat.txt</a></p>
+              EOF
+              : > /data/www/heartbeat.txt
+              echo "$(date -u +%FT%TZ) writer: slow initialisation (10s)..."
+              sleep 10
+
+              # Initialisation done -> start the health endpoint. Until this
+              # line runs, the readiness probe fails and the pod is NOT Ready.
+              mkdir -p /tmp/health && echo ok > /tmp/health/ready
+              httpd -p 8080 -h /tmp/health
+              echo "$(date -u +%FT%TZ) writer: ready"
+
+              while true; do
+                echo "$(date -u +%FT%TZ) heartbeat from ${POD_NAME}" >> /data/www/heartbeat.txt
+                # keep the file small
+                if [ "$(wc -l < /data/www/heartbeat.txt)" -gt 200 ]; then
+                  tail -n 100 /data/www/heartbeat.txt > /data/www/heartbeat.tmp
+                  mv /data/www/heartbeat.tmp /data/www/heartbeat.txt
+                fi
+                sleep 5
+              done
+          ports:
+            - name: health
+              containerPort: 8080
+          readinessProbe:
+            httpGet: { path: /ready, port: health }
+            periodSeconds: 2
+          livenessProbe:
+            # Liveness only kicks in after start-up; a startupProbe gives the
+            # slow initialisation up to 2 minutes before liveness counts.
+            httpGet: { path: /ready, port: health }
+            periodSeconds: 20
+          startupProbe:
+            httpGet: { path: /ready, port: health }
+            periodSeconds: 2
+            failureThreshold: 60
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 100m, memory: 32Mi }
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: shared-data

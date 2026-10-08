@@ -1,0 +1,8 @@
+# Pattern 2 - Concurrent sharing with ordered start-up:
+# pod A (writer) starts and becomes Ready, THEN pod B (web) starts, and from
+# then on both run at the same time on the same RWO volume.
+#   kubectl delete namespace lab-rwo-concurrent   # cleanup
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-rwo-concurrent

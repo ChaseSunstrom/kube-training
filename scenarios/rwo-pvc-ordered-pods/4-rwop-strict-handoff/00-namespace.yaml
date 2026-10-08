@@ -1,0 +1,8 @@
+# Pattern 4 - Strict exclusive hand-off with ReadWriteOncePod:
+# pod A (seed Job) owns the volume, then hands it to pod B (web).
+# At no point can both pods mount it - Kubernetes itself enforces that.
+#   kubectl delete namespace lab-rwo-rwop   # cleanup
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-rwo-rwop

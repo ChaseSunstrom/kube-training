@@ -1,0 +1,117 @@
+# POD B - the web app. It serves the files pod A wrote, so it must not start
+# until the seed Job has COMPLETED successfully.
+#
+# Kubernetes has no "dependsOn" between objects, so the ordering is enforced
+# inside pod B with init containers. Init containers run one after another,
+# each must exit 0 before the next starts, and the app container only starts
+# after all of them succeeded:
+#
+#   1. wait-for-seed-job-created   kubectl wait --for=create            job/seed
+#   2. wait-for-seed-job-complete  kubectl wait --for=condition=complete job/seed
+#   3. verify-seed-data            belt and braces: the marker file must exist
+#   -> nginx starts
+#
+# Because the waiting happens in the cluster, you can `kubectl apply` the
+# files in ANY order (or all at once) and the result is the same.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: lab-rwo-sequential
+  labels:
+    app: web
+spec:
+  replicas: 1
+  # Recreate, NOT RollingUpdate. A rolling update starts the new pod before
+  # the old one stops. With an RWO volume on cloud block storage the new pod
+  # may land on another node and hang on "Multi-Attach error" while the old
+  # pod still holds the volume. Recreate stops the old pod first.
+  # (The co-location affinity below also prevents this, but Recreate is the
+  # standard, obvious-to-readers choice for RWO-backed Deployments.)
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+        rwo-group: shared-data   # same co-location group as the seed Job's pod
+    spec:
+      serviceAccountName: web    # identity used by the kubectl init containers (02-rbac.yaml)
+      affinity:
+        podAffinity:
+          # "Schedule me on a node that already runs a non-finished pod with
+          # rwo-group=shared-data." If NO such pod exists yet, the scheduler
+          # lets the first pod of the group go anywhere, because the pod's own
+          # labels match its own affinity term. So whichever of seed/web is
+          # scheduled first picks the node and the other one follows it.
+          # This is what makes it safe to create B before A: A can never be
+          # scheduled onto a different node than the one B already holds the
+          # volume on (which would mean a Multi-Attach error on cloud disks).
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  rwo-group: shared-data
+              topologyKey: kubernetes.io/hostname
+      initContainers:
+        - name: wait-for-seed-job-created
+          image: rancher/kubectl:v1.36.2   # distroless: entrypoint is kubectl, so we only pass args
+          args: ["wait", "--for=create", "job/seed", "--timeout=10m"]
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { cpu: 100m, memory: 64Mi }
+        - name: wait-for-seed-job-complete
+          image: rancher/kubectl:v1.36.2
+          # Exits 0 as soon as the Job has condition Complete=True.
+          # If the Job fails, this times out, the init container exits 1, and
+          # the pod shows Init:Error / Init:CrashLoopBackOff - a loud, visible
+          # signal that pod A did not succeed.
+          args: ["wait", "--for=condition=complete", "job/seed", "--timeout=10m"]
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { cpu: 100m, memory: 64Mi }
+        - name: verify-seed-data
+          image: busybox:1.37
+          command:
+            - sh
+            - -c
+            - |
+              if [ -f /data/.seed-complete ]; then
+                echo "seed data present, completed at $(cat /data/.seed-complete)"
+              else
+                echo "Job says Complete but /data/.seed-complete is missing - refusing to start" >&2
+                exit 1
+              fi
+          volumeMounts:
+            - name: data
+              mountPath: /data
+              readOnly: true
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 100m, memory: 32Mi }
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          ports:
+            - name: http
+              containerPort: 80
+          volumeMounts:
+            - name: data
+              mountPath: /usr/share/nginx/html
+              subPath: www          # serve only the www/ folder pod A created
+              readOnly: true        # pod B only reads; RWO still allows a read-only mount
+          readinessProbe:
+            httpGet: { path: /, port: http }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /, port: http }
+            periodSeconds: 20
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 200m, memory: 64Mi }
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: shared-data

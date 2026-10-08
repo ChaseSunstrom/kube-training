@@ -1,0 +1,125 @@
+# Two pods, one RWO volume, strict start-up order - no init-container tricks.
+#
+# podManagementPolicy: OrderedReady (the default) guarantees:
+#   * app-0 is created first; app-1 is NOT EVEN CREATED until app-0 is
+#     Running and Ready.
+#   * scale-down / deletion goes in reverse (app-1 first, then app-0).
+#   * rolling updates go from the highest ordinal down (app-1, then app-0).
+#
+# Each pod works out its role from its ordinal (the number in its name):
+#   ordinal 0 -> "initialiser": prepares the shared data, then serves it
+#   ordinal 1 -> "follower":   checks the data is there, records that it
+#                              joined, then serves it
+#
+# Trade-off vs patterns 1/2: one pod template for both pods (same image,
+# same resources). If A and B are genuinely different programs, use pattern 1
+# or 2 instead.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: app
+  namespace: lab-rwo-statefulset
+  labels:
+    app: ordered
+spec:
+  serviceName: app-headless
+  replicas: 2
+  podManagementPolicy: OrderedReady
+  updateStrategy:
+    type: RollingUpdate
+  # A pod must stay Ready this long before the next ordinal is started.
+  minReadySeconds: 5
+  selector:
+    matchLabels:
+      app: ordered
+  template:
+    metadata:
+      labels:
+        app: ordered
+    spec:
+      affinity:
+        podAffinity:
+          # Self-affinity: "run next to the other replicas of this app". The
+          # first replica (app-0) goes anywhere, app-1 must join its node -
+          # the node the RWO volume is attached to. Without this, app-1 could
+          # be scheduled on another node: on cloud block storage it would hang
+          # in ContainerCreating with a Multi-Attach error. (On kind's
+          # local-path storage the PV's node affinity would pin it anyway.)
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: ordered
+              topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 5
+      containers:
+        - name: app
+          image: busybox:1.37
+          env:
+            - name: POD_NAME
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+            - name: NODE_NAME
+              valueFrom: { fieldRef: { fieldPath: spec.nodeName } }
+            # The StatefulSet controller labels every pod with its ordinal
+            # (apps.kubernetes.io/pod-index, GA in Kubernetes 1.32).
+            - name: ORDINAL
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['apps.kubernetes.io/pod-index']
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              now() { date -u +%FT%TZ; }
+              if [ "${ORDINAL}" = "0" ]; then
+                echo "$(now) ${POD_NAME}: I am the initialiser"
+                # Idempotent: ordering only applies to creation/scaling. If
+                # app-0 alone is restarted later, app-1 keeps running and
+                # serving - so app-0 must not wipe data that is already there.
+                if [ -f /data/www/.initialised ]; then
+                  echo "$(now) ${POD_NAME}: data already initialised at $(cat /data/www/.initialised), skipping"
+                else
+                  mkdir -p /data/www
+                  cat > /data/www/index.html <<EOF
+              <h1>StatefulSet: two ordered pods, one RWO volume</h1>
+              <p>Initialised by ${POD_NAME} on ${NODE_NAME} at $(now).</p>
+              <p>Start-up order: <a href="startup-order.txt">startup-order.txt</a></p>
+              EOF
+                  : > /data/www/startup-order.txt
+                  echo "$(now) ${POD_NAME}: slow initialisation (10s)..."
+                  sleep 10
+                  now > /data/www/.initialised
+                fi
+              else
+                echo "$(now) ${POD_NAME}: I am a follower, checking pod-0's data"
+                if [ ! -f /data/www/.initialised ]; then
+                  echo "shared data missing - the initialiser has not run!" >&2
+                  exit 1
+                fi
+              fi
+              echo "$(now) ${POD_NAME} (ordinal ${ORDINAL}) ready on ${NODE_NAME}" >> /data/www/startup-order.txt
+              echo "$(now) ${POD_NAME}: serving /data/www on :8080"
+              exec httpd -f -p 8080 -h /data/www
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            # httpd only starts after the role-specific work above, so the pod
+            # turns Ready (and app-1 gets created) only after app-0 finished
+            # initialising.
+            httpGet: { path: /index.html, port: http }
+            periodSeconds: 2
+          livenessProbe:
+            httpGet: { path: /index.html, port: http }
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 100m, memory: 32Mi }
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: shared-data

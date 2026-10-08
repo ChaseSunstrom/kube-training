@@ -1,0 +1,27 @@
+# Pod A for broken/02-rwop-init-wait-deadlock.yaml - apply it AFTER the web
+# pod is already sitting in Init. It will stay Pending forever because the
+# web pod owns the ReadWriteOncePod claim.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: seed
+  namespace: lab-rwo-deadlock
+spec:
+  backoffLimit: 1
+  template:
+    metadata:
+      labels: { app: seed }
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: seed
+          image: busybox:1.37
+          command: ["sh", "-c", "echo seeded > /data/index.html"]
+          volumeMounts:
+            - { name: data, mountPath: /data }
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 100m, memory: 32Mi }
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: shared-data }

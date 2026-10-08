@@ -1,0 +1,18 @@
+# Internal Service for pod A. Its job here is to be the "A is ready" signal:
+# a Service only has endpoints for Ready pods, so
+#   wget http://writer:8080/ready
+# fails (connection refused) until the writer finished initialising.
+apiVersion: v1
+kind: Service
+metadata:
+  name: writer
+  namespace: lab-rwo-concurrent
+  labels:
+    app: writer
+spec:
+  selector:
+    app: writer
+  ports:
+    - name: health
+      port: 8080
+      targetPort: health

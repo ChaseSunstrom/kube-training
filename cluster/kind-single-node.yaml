@@ -1,0 +1,11 @@
+# Smallest possible cluster (one node does everything).
+# Good for laptops with little RAM. A few scheduling exercises
+# (anti-affinity, topology spread) will behave differently on one node -
+# the module READMEs call this out where it matters.
+#
+#   kind create cluster --config cluster/kind-single-node.yaml
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: kube-training
+nodes:
+  - role: control-plane

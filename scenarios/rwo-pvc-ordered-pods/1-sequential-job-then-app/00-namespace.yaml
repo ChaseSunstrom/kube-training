@@ -1,0 +1,8 @@
+# Pattern 1 - Sequential hand-off: Job (pod A) finishes, then the app (pod B) starts.
+# Everything for this pattern lives in its own namespace so it can't
+# collide with the other patterns and cleanup is one command:
+#   kubectl delete namespace lab-rwo-sequential
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-rwo-sequential
