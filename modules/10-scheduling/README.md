@@ -44,8 +44,8 @@ kubectl apply ──> API server ──> pod with spec.nodeName empty
 ```
 
 If **no** node survives the filter, the pod stays `Pending`, the scheduler
-records a `FailedScheduling` event and (if the pod has a priority) tries
-**preemption**. It retries automatically whenever something relevant changes in
+records a `FailedScheduling` event and tries **preemption** (evicting
+lower-priority pods, if that would help). It retries automatically whenever something relevant changes in
 the cluster (a node is added, a pod is deleted, a taint is removed...) and at
 the latest every 5 minutes.
 

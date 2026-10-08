@@ -1,0 +1,23 @@
+# Exercise 2 - "my HTTPRoute does nothing".
+#
+# Apply it and try:  curl http://shop.localhost/     -> 404
+# Find out WHY using only the route's status:
+#   kubectl -n lab-ingress get httproute shop -o yaml     (look at status.parents)
+# There are TWO mistakes. Fix them without touching the Gateway.
+# Solution: ../solutions/02-fixed-route.yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: shop
+  namespace: lab-ingress
+  labels:
+    app: lab-ingress
+spec:
+  parentRefs:
+    - name: lab-gateway
+  hostnames:
+    - shop.localhost
+  rules:
+    - backendRefs:
+        - name: whoami
+          port: 8080

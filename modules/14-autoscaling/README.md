@@ -125,12 +125,13 @@ and a resize changes only **that pod** – not the Deployment's template.
 
 Run all commands from the repo root.
 
-> **About the output shown here.** This module was tested on a cluster where
-> the metrics-server image could not be pulled (an offline sandbox), so the
-> outputs of `kubectl top` and of the HPA actually scaling (steps 2, 5, 6)
-> are **examples** of what you will see, based on the load measured directly
-> from the kubelet in step 4. Everything else is real output. On your laptop
-> with internet access, all steps work as written.
+> **About the output shown here.** This module was tested on a cluster that
+> could not pull the metrics-server image (an offline sandbox). The
+> metrics-server install (step 1) was validated with a server-side dry run,
+> and the outputs of `kubectl top` and of the HPA actually scaling (steps 2,
+> 5, 6) are **examples** of what you will see, based on the load measured
+> directly from the kubelet in step 4. Everything else is real output. On
+> your laptop with internet access, all steps work as written.
 
 ### 1. Install metrics-server
 
@@ -161,10 +162,10 @@ apiservice.apiregistration.k8s.io/v1beta1.metrics.k8s.io created
 ```
 
 The `Kustomization` pulls the pinned upstream release manifest and adds one
-flag. Without `--kubelet-insecure-tls` the metrics-server pod runs but never
-becomes Ready on kind, and its log shows `x509: cannot validate certificate
-for 172.18.0.x because it doesn't contain any IP SANs` – kind's kubelets use
-self-signed serving certificates. The same change by hand, if you installed
+flag. Without `--kubelet-insecure-tls` the metrics-server pod typically runs
+but never becomes Ready on kind, and its log shows TLS errors such as
+`x509: cannot validate certificate for 172.18.0.x because it doesn't contain
+any IP SANs` – kind's kubelets use self-signed serving certificates. The same change by hand, if you installed
 the plain manifest:
 
 ```bash

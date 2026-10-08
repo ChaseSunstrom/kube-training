@@ -21,8 +21,9 @@ data:
   default.conf: |
     server {
         listen       8080;          # unprivileged port: works for any uid on any runtime
-        # (no "listen [::]:8080" - kind clusters are usually IPv4-only and nginx
-        #  exits with "Address family not supported" if the pod has no IPv6)
+        # (no "listen [::]:8080" - kind clusters are IPv4-only by default, and on a
+        #  node whose kernel has IPv6 disabled nginx would exit with
+        #  "Address family not supported")
         server_name  _;
 
         location / {

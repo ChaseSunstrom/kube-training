@@ -7,8 +7,10 @@
 #
 # Test with e.g.
 #   kubectl -n lab-netpol exec frontend -- curl -s -m 3 http://backend
-# A blocked connection doesn't get "connection refused": the packets are
-# silently DROPPED, so curl waits until -m 3 (3 s) and exits with code 28.
+# With kindnet (and Calico, Cilium) a blocked connection doesn't get
+# "connection refused": the packets are silently DROPPED, so curl waits
+# until -m 3 (3 s) and exits with code 28. Some implementations reject
+# instead (curl exit code 7). check-connectivity.sh treats both as "blocked".
 apiVersion: v1
 kind: Pod
 metadata:

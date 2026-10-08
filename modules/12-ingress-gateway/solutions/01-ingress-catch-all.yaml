@@ -1,0 +1,37 @@
+# Solution to exercise 1: a catch-all for echo.localhost that does NOT steal
+# the /v2 Exact path.
+#
+# What went wrong when you added  path: /  (Prefix)  to the "demo" Ingress:
+# the Ingress spec says the LONGEST matching path wins (and Exact beats
+# Prefix), so /v2 should still reach echo-v2. Traefik instead orders its
+# routers by the LENGTH OF THE GENERATED RULE STRING (see the dashboard):
+#   Host("echo.localhost") && PathPrefix("/")   41 characters -> priority 41
+#   Host("echo.localhost") && Path("/v2")       37 characters -> priority 37
+# so the catch-all wins. Controllers interpret Ingress differently - one of
+# the reasons the Gateway API comes with precise rules and conformance tests.
+#
+# Fix with Traefik: put the catch-all in its own Ingress and give its router
+# an explicit low priority (the annotation applies to all routers of THIS
+# Ingress only). Re-apply 03-ingress.yaml first if you edited it.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: echo-catch-all
+  namespace: lab-ingress
+  labels:
+    app: lab-ingress
+  annotations:
+    traefik.ingress.kubernetes.io/router.priority: "1"
+spec:
+  ingressClassName: lab-traefik
+  rules:
+    - host: echo.localhost
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: whoami
+                port:
+                  name: http

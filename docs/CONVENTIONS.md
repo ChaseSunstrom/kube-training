@@ -53,6 +53,10 @@ scenarios/<name>/      # deeper, real-world problems (multi-file, multi-pattern)
 | `rancher/kubectl:v1.36.2` | in-cluster `kubectl` (RBAC demos, waiting on Jobs, scaling). Distroless: no shell, entrypoint is `kubectl`, runs as non-root. Newest published tag; ±1 minor version skew with the 1.37 API server is supported |
 | `redis:7.4-alpine` | stateful demo workload |
 | `postgres:16-alpine` | capstone database |
+| `traefik:v3.7.13` | the ingress / Gateway API controller installed in module 12 |
+
+A few manifests use a wrong or `:latest` tag **on purpose** (broken apps in
+modules 03 and 16, the admission-policy demo in module 15); their comments say so.
 
 * Resource requests/limits are set on every long-running container (small
   values — this is a laptop cluster).

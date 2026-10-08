@@ -387,7 +387,11 @@ kubectl debug flaky --copy-to=flaky-v2 --set-image=app=busybox:1.37 --profile=ge
 kubectl debug flaky -it --copy-to=flaky-shared --image=busybox:1.37 --share-processes -c sidecar -- sh
 ```
 
-The copy has **no labels** (so a Service or ReplicaSet won't adopt it) and is
+A copy that gets a changed command or a debug container has **no labels** and
+no probes (so a Service or ReplicaSet won't adopt it). A `--set-image`-only
+copy like `flaky-v2` keeps both: fine for a bare pod, but copy a Deployment's
+pod that way and its ReplicaSet adopts the copy and deletes it at once (add
+`--image=busybox:1.37` or change the command to avoid that). Copies are
 **not** cleaned up automatically: `kubectl delete pod flaky-debug flaky-v2 flaky-shared --ignore-not-found`.
 
 #### 11. Digging into status with `-o yaml`, jsonpath and friends
@@ -853,8 +857,10 @@ kubectl logs deploy/inventory --tail=1        # items in stock: N
    container, find out which port a `catalog-api` pod listens on *without*
    looking at any YAML, then watch the client's requests arrive with `tcpdump`.
    *Hint:* `kubectl debug <pod> -it --image=nicolaka/netshoot:v0.13 --target=api --profile=netadmin`,
-   then `ss -tlnp` and `tcpdump -i any -nn port 80`. Without `--profile=netadmin`
-   tcpdump fails: it needs `NET_RAW`/`NET_ADMIN`.
+   then `ss -tlnp` and `tcpdump -i any -nn port 80`. tcpdump needs `NET_RAW`,
+   and `netadmin` adds `NET_ADMIN`/`NET_RAW` explicitly. (`general` happens to
+   work on kind too, because containerd's default capability set includes
+   `NET_RAW` - but don't count on that where runtimes or policies drop it.)
 
 3. **Find the log file on the node.** Pick a `web` pod, find its node
    (`-o wide`), open a node shell and locate the container's log file under

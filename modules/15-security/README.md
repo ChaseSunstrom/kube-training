@@ -128,6 +128,9 @@ silently fails to create pods - you will see this in the lab. Always pair
   registry which digest the tag points to *right now*. In multi-tenant
   clusters, `Always` (or the `AlwaysPullImages` admission plugin) stops a pod
   from using a private image that someone else's pod already pulled to the node.
+  (The 1.37 kubelet also guards `IfNotPresent` pods: with the
+  `KubeletEnsureSecretPulledImages` feature, on by default, it re-checks the
+  pod's pull credentials before reusing an image that was pulled with a Secret.)
 * Tools like Renovate/Dependabot can keep digests up to date automatically.
 
 ### ServiceAccount tokens
@@ -154,7 +157,8 @@ ValidatingAdmissionPolicy          ValidatingAdmissionPolicyBinding
 
 Inside CEL, `object` is the incoming object (`oldObject` on UPDATE),
 `request` has the user and operation, `namespaceObject` the namespace, and
-`params` the optional parameter resource. Both objects are cluster-scoped.
+`params` the optional parameter resource. The policy and the binding are
+both cluster-scoped objects.
 
 Its newer sibling **MutatingAdmissionPolicy** does CEL-based *mutation* (for
 example adding default securityContexts). It is not covered here - check
@@ -513,7 +517,7 @@ drwx--S---    2 nginx    nginx         4096 Oct  8 10:15 proxy_temp
 | emptyDir on `/var/cache/nginx` | `CrashLoopBackOff`; logs: `[emerg] mkdir() "/var/cache/nginx/client_temp" failed (30: Read-only file system)` |
 | emptyDir on `/var/run` | `CrashLoopBackOff`; `open() "/run/nginx.pid" failed (30: Read-only file system)` |
 | `listen 8080` (keep port 80) | works on kind/containerd 2.x (unprivileged port sysctl), but `bind() to 0.0.0.0:80 failed (13: Permission denied)` on runtimes without it |
-| no `listen [::]:8080` removal | on an IPv4-only cluster: `socket() [::]:8080 failed (97: Address family not supported by protocol)` |
+| keep a `listen [::]:8080` line | fine on most machines (even on an IPv4-only cluster the kernel still has IPv6), but on nodes whose kernel has IPv6 disabled (e.g. VMs booted with `ipv6.disable=1`): `socket() [::]:8080 failed (97: Address family not supported by protocol)` |
 
 The log line `the "user" directive makes sense only if the master process
 runs with super-user privileges, ignored` is expected: the stock
@@ -625,6 +629,8 @@ Things to notice:
   and `localhost:5000/app:1.0` as fine, because it only looks for `:` after
   the last `/`. Check with a server-side dry run:
   `kubectl -n lab-security run t --image=localhost:5000/app --dry-run=server`.
+  (With `:1.0` added, policy 09 is happy and only policy 10 complains -
+  `kubectl run` sets no resources.)
 * The bindings only select `lab-security`; the same pods in any other
   namespace are not affected.
 

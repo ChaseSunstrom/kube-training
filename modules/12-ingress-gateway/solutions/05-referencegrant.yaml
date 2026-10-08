@@ -1,0 +1,44 @@
+# Solution to exercise 5: a route in lab-ingress-team using a Service that
+# lives in lab-ingress.
+#
+# Without the ReferenceGrant the route's status says
+#   ResolvedRefs=False  reason RefNotPermitted
+# Cross-namespace references must be allowed by the OWNER of the target
+# namespace - a ReferenceGrant lives in the namespace being referenced
+# (lab-ingress) and says "HTTPRoutes from lab-ingress-team may reference my
+# Services". Otherwise any team could route traffic to anybody's Service.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: team-whoami
+  namespace: lab-ingress-team
+  labels:
+    app: team-app
+spec:
+  parentRefs:
+    - name: lab-gateway
+      namespace: lab-ingress
+      sectionName: http
+  hostnames:
+    - team-whoami.gw.localhost
+  rules:
+    - backendRefs:
+        - name: whoami
+          namespace: lab-ingress   # cross-namespace backend
+          port: 80
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: ReferenceGrant
+metadata:
+  name: allow-team-routes
+  namespace: lab-ingress           # the namespace being referenced
+  labels:
+    app: lab-ingress
+spec:
+  from:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      namespace: lab-ingress-team
+  to:
+    - group: ""
+      kind: Service

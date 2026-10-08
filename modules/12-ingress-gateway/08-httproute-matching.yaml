@@ -1,16 +1,22 @@
 # 08 - HTTPRoute matching and filters.
 #
-# Within a route, the MOST SPECIFIC match wins (exact path > longest prefix >
-# method > number of header matches ...), not the order in the file.
+#   echo.gw.localhost/v1...  + header "X-Canary: true"   -> echo-v2
+#   echo.gw.localhost/v1...  (no such header)            -> echo-v1
+#   echo.gw.localhost/api/... -> whoami, with the prefix /api REWRITTEN to /
+#                                and an extra request header added
+#   anything else on echo.gw.localhost                   -> 404
 #
-#   echo.gw.localhost  with header "X-Canary: true"  -> echo-v2
-#   echo.gw.localhost  /v1... (PathPrefix)           -> echo-v1
-#   echo.gw.localhost  /api/... (PathPrefix)         -> whoami, with the
-#                      prefix /api REWRITTEN to / and an extra request header
-#   anything else on echo.gw.localhost               -> 404
+# Inside ONE match, all conditions are ANDed (path AND headers). Several
+# matches in a rule are ORed. When several rules match a request, the most
+# specific one wins - NOT the first one in the file:
+#   1. the longest matching path (Exact beats PathPrefix of the same length)
+#   2. then the most header matches
+#   3. then the most query-parameter matches
+# That's why the canary rule repeats the /v1 path: a rule with ONLY the
+# header (implicit path prefix "/") would lose to "/v1" for every /v1 request.
 #
-# Things Ingress needed controller-specific annotations for - header matching,
-# rewrites, header modification - are part of the standard API here.
+# Header matching, rewrites, header modification... Ingress needed
+# controller-specific annotations for all of these; here they are standard.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -26,7 +32,10 @@ spec:
     - echo.gw.localhost
   rules:
     - matches:
-        - headers:
+        - path:
+            type: PathPrefix
+            value: /v1
+          headers:                # same list item as path -> AND
             - name: X-Canary
               value: "true"
       backendRefs:

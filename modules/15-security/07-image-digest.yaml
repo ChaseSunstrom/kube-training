@@ -23,8 +23,10 @@
 #                 except :latest, and for digests.
 #   Always        ask the registry for the current digest on EVERY container
 #                 start (layers are only downloaded if they changed). Default
-#                 for :latest or no tag. Needed in multi-tenant clusters so a
-#                 pod can't reuse a private image another tenant pulled.
+#                 for :latest or no tag. The classic multi-tenant fix so a
+#                 pod can't reuse a private image another tenant pulled (the
+#                 1.37 kubelet also re-checks pull credentials for such images:
+#                 KubeletEnsureSecretPulledImages, on by default).
 #   Never         only use what is already on the node.
 # Digest + IfNotPresent = reproducible AND fast.
 apiVersion: v1

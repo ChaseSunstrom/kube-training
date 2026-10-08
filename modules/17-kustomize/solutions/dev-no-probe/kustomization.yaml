@@ -15,7 +15,8 @@ resources:
 patches:
   - target:
       kind: Deployment
-      name: dev-web          # the name AFTER dev's prefix, because overlays/dev already applied it
+      name: dev-web          # the name AFTER dev's prefix (the base name "web" would match too:
+                             # targets match the current OR the original name)
     patch: |-
       - op: test             # fail the build if the object isn't what we expect
         path: /spec/template/spec/containers/0/name

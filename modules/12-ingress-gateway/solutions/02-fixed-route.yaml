@@ -1,0 +1,26 @@
+# Solution to exercise 2.
+#
+# status.parents[].conditions showed:
+#   Accepted=False      reason NoMatchingListenerHostname
+#       shop.localhost doesn't match any listener hostname of lab-gateway
+#       (both listeners only accept *.gw.localhost)
+#   ResolvedRefs=False  reason BackendNotFound / port problem
+#       the whoami Service has port 80, not 8080
+# Fix: use a hostname under *.gw.localhost and the Service's real port.
+#   curl http://shop.gw.localhost/
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: shop
+  namespace: lab-ingress
+  labels:
+    app: lab-ingress
+spec:
+  parentRefs:
+    - name: lab-gateway
+  hostnames:
+    - shop.gw.localhost
+  rules:
+    - backendRefs:
+        - name: whoami
+          port: 80

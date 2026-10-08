@@ -83,9 +83,10 @@ the hash off (exercise 5 shows what you lose).
 ### Labels: `labels` instead of `commonLabels`
 
 `commonLabels` adds labels everywhere *including selectors*. A Deployment's
-`spec.selector` is immutable, so changing a common label later makes
-`kubectl apply` fail; adding one to a running app orphans the old
-ReplicaSet's pods. Use `labels` with `includeSelectors: false` (and
+`spec.selector` is immutable, so adding or changing a common label on a
+running app makes `kubectl apply` fail (`spec.selector: ... field is
+immutable`) - and by then the Service's selector has already been updated,
+so the Service has no endpoints. Use `labels` with `includeSelectors: false` (and
 `includeTemplates: true` to label pods too). Other deprecated fields you'll
 see in older repos: `patchesStrategicMerge` / `patchesJson6902` (use
 `patches`), `bases` (use `resources`), `vars` (use `replacements`).
@@ -362,8 +363,11 @@ Things worth knowing before you rely on it:
 
 4. **Remove, don't merge.** Build an overlay *on top of* `overlays/dev` that
    removes the readiness probe with a JSON 6902 patch, guarded by an `op:
-   test` that checks the first container is `whoami`. What name must the
-   patch target use - `web` or `dev-web` - and why?
+   test` that checks the first container is `whoami`. Should the patch
+   target say `web` or `dev-web`? Try both.
+   *Answer:* both work - a `target` name matches an object's current name
+   (`dev-web`, after dev's prefix) *or* the original name it had in the base
+   (`web`). `dev-web` is the more explicit choice.
    Solution: [`solutions/dev-no-probe/`](solutions/dev-no-probe/kustomization.yaml).
 
 5. **Life without the hash.** Add

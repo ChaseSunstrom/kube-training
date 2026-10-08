@@ -142,6 +142,10 @@ spec:
             - --providers.kubernetesingress=true
             - --providers.kubernetesingress.ingressClass=lab-traefik
             - --providers.kubernetesingress.ingressEndpoint.hostname=localhost
+            # Follow the Ingress spec for pathType: Prefix (match whole path
+            # elements: /v1 matches /v1/x but not /v1beta). Traefik's default
+            # is plain string-prefix matching - controllers DO differ.
+            - --providers.kubernetesingress.strictPrefixMatching=true
             # Gateway API provider (GatewayClass controllerName traefik.io/gateway-controller).
             - --providers.kubernetesgateway=true
             - --providers.kubernetesgateway.statusAddress.hostname=localhost
