@@ -57,7 +57,7 @@ FILES=()
 while IFS= read -r f; do
   in_kustomize_tree "$f" && continue
   # Helm template snippets (e.g. exercise solutions meant for chart/templates/)
-  if grep -q '{{' "$f"; then echo "(skipping Helm template snippet: $f)"; continue; fi
+  if grep -qE '^[[:space:]]*[^#[:space:]].*\{\{|^\{\{' "$f"; then echo "(skipping Helm template snippet: $f)"; continue; fi
   FILES+=("$f")
 done < <(
   find modules scenarios -type f \( -name '*.yaml' -o -name '*.yml' \) \

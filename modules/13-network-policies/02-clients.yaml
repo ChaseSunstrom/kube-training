@@ -1,4 +1,4 @@
-# 02 - Clients to test from (netshoot: curl, dig, nc, tcpdump ...).
+# 02 - Clients to test from: curlimages/curl (curl + busybox nslookup, nc).
 #
 #   lab-netpol/frontend       app=frontend   the "legitimate" client
 #   lab-netpol/intruder       app=intruder   same namespace, wrong label
@@ -19,12 +19,12 @@ metadata:
 spec:
   terminationGracePeriodSeconds: 1
   containers:
-    - name: netshoot
-      image: nicolaka/netshoot:v0.13
+    - name: curl
+      image: curlimages/curl:8.11.1
       command: ["sleep", "infinity"]
       resources:
         requests: {cpu: 5m, memory: 16Mi}
-        limits: {cpu: 200m, memory: 64Mi}
+        limits: {cpu: 200m, memory: 32Mi}
 ---
 apiVersion: v1
 kind: Pod
@@ -36,12 +36,12 @@ metadata:
 spec:
   terminationGracePeriodSeconds: 1
   containers:
-    - name: netshoot
-      image: nicolaka/netshoot:v0.13
+    - name: curl
+      image: curlimages/curl:8.11.1
       command: ["sleep", "infinity"]
       resources:
         requests: {cpu: 5m, memory: 16Mi}
-        limits: {cpu: 200m, memory: 64Mi}
+        limits: {cpu: 200m, memory: 32Mi}
 ---
 apiVersion: v1
 kind: Pod
@@ -53,12 +53,12 @@ metadata:
 spec:
   terminationGracePeriodSeconds: 1
   containers:
-    - name: netshoot
-      image: nicolaka/netshoot:v0.13
+    - name: curl
+      image: curlimages/curl:8.11.1
       command: ["sleep", "infinity"]
       resources:
         requests: {cpu: 5m, memory: 16Mi}
-        limits: {cpu: 200m, memory: 64Mi}
+        limits: {cpu: 200m, memory: 32Mi}
 ---
 apiVersion: v1
 kind: Pod
@@ -70,9 +70,9 @@ metadata:
 spec:
   terminationGracePeriodSeconds: 1
   containers:
-    - name: netshoot
-      image: nicolaka/netshoot:v0.13
+    - name: curl
+      image: curlimages/curl:8.11.1
       command: ["sleep", "infinity"]
       resources:
         requests: {cpu: 5m, memory: 16Mi}
-        limits: {cpu: 200m, memory: 64Mi}
+        limits: {cpu: 200m, memory: 32Mi}

@@ -1,0 +1,31 @@
+# Exercise 3 - solution: a client on a node that runs no whoami pod.
+#
+# The control-plane node is tainted NoSchedule, so normal pods (including
+# all whoami replicas) never land there. This client tolerates the taint and
+# selects that node explicitly. (Fine for a lab; in real clusters keep
+# workloads off the control plane.)
+#
+#   kubectl apply -f modules/04-services/solutions/client-on-control-plane.yaml
+#   kubectl exec -n lab-services client-cp -- curl -s -m 2 http://whoami-local   # fails: no local endpoint
+#   kubectl exec -n lab-services client-cp -- curl -s -m 2 http://whoami | grep Hostname   # works
+apiVersion: v1
+kind: Pod
+metadata:
+  name: client-cp
+  namespace: lab-services
+  labels:
+    app: client
+spec:
+  nodeSelector:
+    node-role.kubernetes.io/control-plane: ""
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
+  containers:
+    - name: netshoot
+      image: nicolaka/netshoot:v0.13
+      command: ["sh", "-c", "trap 'exit 0' TERM; sleep infinity & wait"]
+      resources:
+        requests: { cpu: 10m, memory: 16Mi }
+        limits: { cpu: 200m, memory: 128Mi }
