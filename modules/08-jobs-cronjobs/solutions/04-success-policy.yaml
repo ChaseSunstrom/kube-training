@@ -3,7 +3,7 @@
 # By default an Indexed Job needs EVERY index to succeed. A successPolicy
 # declares the Job successful earlier; remaining pods are then terminated.
 # Here index 0 is a "leader" that finishes after 5s, while the "workers"
-# (indexes 1-3) would run for 5 minutes. The Job completes after ~5s with the
+# (indexes 1-3) would run for 5 minutes. The Job completes after ~10s with the
 # SuccessCriteriaMet condition (reason SuccessPolicy), and the workers are
 # stopped. Typical use: distributed training where only the leader's result
 # matters.

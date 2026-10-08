@@ -21,8 +21,11 @@ metadata:
     app: mesh
 spec:
   clusterIP: None
-  # Pods must be resolvable before they are Ready (they never get a
-  # readiness probe here), so publish them right away.
+  # Optional: publish each pod's DNS record as soon as it has an IP, not only
+  # once it is Ready. A pod without a readiness probe is Ready as soon as its
+  # container starts, so here it only saves a moment (the Job also completes
+  # without it); it matters when members must find each other before their
+  # readiness probes pass (MPI, distributed training).
   publishNotReadyAddresses: true
   selector:
     app: mesh

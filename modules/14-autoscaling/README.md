@@ -103,8 +103,8 @@ CPU) – they'd fight: VPA raises the request, utilization drops, HPA scales in�
 **In-place pod resize** changes a running pod's requests/limits through the
 pod's `resize` subresource; the kubelet updates the container's cgroup, and
 `resizePolicy` decides per resource whether the container must restart. It
-was beta (on by default) in Kubernetes 1.33 and is enabled without any
-feature gate on the 1.37 clusters this course targets. Rules worth knowing:
+was beta (on by default) in Kubernetes 1.33 and is GA (stable, no feature
+gate involved) on the 1.37 clusters this course targets. Rules worth knowing:
 the QoS class can't change, a resize that doesn't fit the node is refused,
 and a resize changes only **that pod** – not the Deployment's template.
 

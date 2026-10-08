@@ -1,6 +1,6 @@
 # Solution to exercise 1 - a Job that fails about half of the time.
 #
-# Each attempt "rolls a die" (exit 1 if $RANDOM is odd). With
+# Each attempt "rolls a die" (exit 1 if awk's random number is odd). With
 # restartPolicy: Never every failed attempt leaves a pod behind, so
 #   kubectl get pods -n lab-jobs -l app=flaky
 # shows how many tries it took. The Job is Complete as soon as ONE attempt

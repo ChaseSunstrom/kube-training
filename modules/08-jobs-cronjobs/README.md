@@ -614,8 +614,9 @@ kubectl patch cronjob slow -n lab-jobs -p '{"spec":{"suspend":true}}'
    indexes where index 0 serves a file over HTTP (`busybox httpd`) and indexes
    1 and 2 download it from `mesh-0.mesh`.
    *Hint:* a headless Service named `mesh` and `spec.subdomain: mesh` in the
-   pod template. Pods without a readiness probe need
-   `publishNotReadyAddresses: true`. Solution:
+   pod template. `publishNotReadyAddresses: true` on the Service is optional:
+   it publishes each pod's name as soon as the pod has an IP instead of once
+   it is Ready. Solution:
    [`solutions/06-indexed-with-dns.yaml`](solutions/06-indexed-with-dns.yaml).
 
 ## Cleanup

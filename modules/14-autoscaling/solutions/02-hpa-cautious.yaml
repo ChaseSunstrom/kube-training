@@ -5,7 +5,8 @@
 #   scale-down: wait until the lower count has been recommended for 2 min,
 #               then remove at most 50% of the pods per minute
 # tolerance (available on Kubernetes 1.37): ignore changes within 5% of the
-# target instead of the cluster default of 10%.
+# target instead of the cluster default of 10%. It is set per direction, so
+# it appears under both scaleUp and scaleDown.
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
@@ -37,6 +38,7 @@ spec:
           periodSeconds: 30
     scaleDown:
       stabilizationWindowSeconds: 120
+      tolerance: "0.05"
       policies:
         - type: Percent
           value: 50
