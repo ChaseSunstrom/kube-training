@@ -5,7 +5,8 @@
 # 2nd attempt, e.g. 300m: within the LimitRange, but the ResourceQuota plugin
 # (04-resourcequota.yaml) refuses it, because requests.cpu would exceed 200m:
 #   exceeded quota: team-a-quota, requested: requests.cpu=300m, used: requests.cpu=30m, limited: requests.cpu=200m
-# (used = 5m for `app` + 25m defaulted for `defaults-demo`)
+# (used = 5m for `app` + 25m defaulted for `defaults-demo`; if the filler pods
+#  are still terminating you will also see pods=1 in the message - wait a moment)
 # 150m fits both: <= 500m per container, and 30m + 150m <= 200m in total.
 #
 #   kubectl apply -f modules/02-namespaces-labels/solutions/big-request.yaml

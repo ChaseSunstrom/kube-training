@@ -1,0 +1,54 @@
+# 03 - The Ingress API: host and path rules.
+#
+# ingressClassName picks the controller (our IngressClass lab-traefik from 01).
+# An Ingress without a class is only handled if some IngressClass is marked
+# as the cluster default.
+#
+# Rules are matched on the HTTP Host header first, then on the path:
+#   pathType: Prefix  matches whole path ELEMENTS: /v1 matches /v1, /v1/ and
+#                     /v1/anything - but NOT /v1beta
+#   pathType: Exact   matches only that exact path (/v2, not /v2/ or /v2/x)
+#   pathType: ImplementationSpecific - up to the controller (avoid it)
+# Requests that match no rule get the controller's default answer (Traefik:
+# 404 page not found).
+#
+# Note: the backend receives the ORIGINAL path (/v1/...). Ingress has no
+# standard way to rewrite paths - every controller invented its own
+# annotations for that. HTTPRoute has it built in (08).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: demo
+  namespace: lab-ingress
+  labels:
+    app: lab-ingress
+spec:
+  ingressClassName: lab-traefik
+  rules:
+    - host: whoami.localhost
+      http:
+        paths:
+          - path: /
+            pathType: Prefix          # "/" + Prefix = everything on this host
+            backend:
+              service:
+                name: whoami
+                port:
+                  name: http
+    - host: echo.localhost
+      http:
+        paths:
+          - path: /v1
+            pathType: Prefix
+            backend:
+              service:
+                name: echo-v1
+                port:
+                  number: 80
+          - path: /v2
+            pathType: Exact
+            backend:
+              service:
+                name: echo-v2
+                port:
+                  number: 80

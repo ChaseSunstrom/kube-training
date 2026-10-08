@@ -1,0 +1,40 @@
+# 04 - TLS termination for an Ingress host.
+#
+# PREREQUISITE: the Secret lab-tls (type kubernetes.io/tls) - created in the
+# README with openssl + `kubectl create secret tls`. It holds a self-signed
+# certificate for whoami.localhost and *.gw.localhost.
+#
+# spec.tls lists hosts and the Secret with their certificate. The
+# controller terminates TLS (decrypts) and forwards plain HTTP to the pods.
+# The Secret must be in the SAME namespace as the Ingress.
+#
+# Traefik-specific: by default Traefik serves an Ingress on all entry points.
+# These two annotations make this one HTTPS-only on the websecure entry point
+# (port 443), while 03 keeps serving whoami.localhost over plain HTTP.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: whoami-tls
+  namespace: lab-ingress
+  labels:
+    app: lab-ingress
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  ingressClassName: lab-traefik
+  tls:
+    - hosts:
+        - whoami.localhost
+      secretName: lab-tls
+  rules:
+    - host: whoami.localhost
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: whoami
+                port:
+                  name: http

@@ -1,0 +1,21 @@
+# 05 - GatewayClass: "which controller implements Gateways of this class".
+#
+# Gateway API splits responsibilities into roles:
+#   GatewayClass  (cluster-scoped)  infrastructure provider: which implementation
+#   Gateway       (namespaced)      cluster operator: listeners - ports,
+#                                   protocols, hostnames, TLS certificates,
+#                                   which namespaces may attach routes
+#   HTTPRoute     (namespaced)      app developer: hostnames/paths/headers ->
+#                                   Services, weights, filters
+#
+# controllerName must be the value the implementation looks for; Traefik
+# uses traefik.io/gateway-controller. If it's wrong, the GatewayClass stays
+# "Accepted: Unknown/Waiting for controller" forever.
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: lab-traefik
+  labels:
+    app: lab-ingress
+spec:
+  controllerName: traefik.io/gateway-controller

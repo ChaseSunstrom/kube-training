@@ -134,6 +134,10 @@ spec:
             # the hostPorts below expose them as 80/443 on the node).
             - --entryPoints.web.address=:8000
             - --entryPoints.websecure.address=:8443
+            # Drop request headers like X_Forwarded_User that some backends
+            # would read as X-Forwarded-User (header spoofing).
+            - --entryPoints.web.http.aliasHeadersStrategy=delete
+            - --entryPoints.websecure.http.aliasHeadersStrategy=delete
             # Kubernetes Ingress provider, only for our IngressClass.
             - --providers.kubernetesingress=true
             - --providers.kubernetesingress.ingressClass=lab-traefik
@@ -147,7 +151,10 @@ spec:
             - --api.insecure=true
             - --ping=true
             - --log.level=INFO
+            - --log.noColor=true
             - --accesslog=true
+            - --global.checkNewVersion=false
+            - --global.sendAnonymousUsage=false
           ports:
             - name: web
               containerPort: 8000

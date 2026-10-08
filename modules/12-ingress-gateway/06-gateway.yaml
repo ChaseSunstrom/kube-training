@@ -1,0 +1,42 @@
+# 06 - Gateway: the "front door" - which ports/protocols/hostnames to accept.
+#
+# Traefik maps each listener to one of its entry points BY PORT NUMBER, so
+# listener ports are Traefik's container ports (8000 = web, 8443 = websecure)
+# - clients still use 80/443 on your laptop thanks to the hostPorts in 01.
+# (With other implementations, e.g. Envoy Gateway or a cloud load balancer,
+# you'd write port 80/443 here and the implementation creates a Service.)
+#
+# hostname "*.gw.localhost" restricts which hostnames routes may claim on
+# this listener. allowedRoutes.namespaces.from: Same = only HTTPRoutes in
+# lab-ingress may attach (other options: All, or a Selector on namespace
+# labels). That's how a platform team can share one Gateway with app teams
+# without giving everyone control over it.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: lab-gateway
+  namespace: lab-ingress
+  labels:
+    app: lab-ingress
+spec:
+  gatewayClassName: lab-traefik
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 8000
+      hostname: "*.gw.localhost"
+      allowedRoutes:
+        namespaces:
+          from: Same
+    - name: https
+      protocol: HTTPS
+      port: 8443
+      hostname: "*.gw.localhost"
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: lab-tls           # same self-signed cert as 04
+      allowedRoutes:
+        namespaces:
+          from: Same
