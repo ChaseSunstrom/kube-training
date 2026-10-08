@@ -43,7 +43,7 @@ KC_ARGS=(
 # Plain manifests: everything under modules/ and scenarios/ except files that
 # are not standalone Kubernetes objects: Helm charts, values files, and
 # anything inside a Kustomize tree (patches are partial objects - those trees
-# are validated below through `kubectl kustomize`).
+# are validated below through `kubectl kustomize`), and Helm template snippets.
 mapfile -t KUSTOMIZE_DIRS < <(find modules scenarios -name kustomization.yaml -exec dirname {} \; | sort)
 in_kustomize_tree() {
   local f="$1" d
@@ -55,7 +55,10 @@ in_kustomize_tree() {
 }
 FILES=()
 while IFS= read -r f; do
-  in_kustomize_tree "$f" || FILES+=("$f")
+  in_kustomize_tree "$f" && continue
+  # Helm template snippets (e.g. exercise solutions meant for chart/templates/)
+  if grep -q '{{' "$f"; then echo "(skipping Helm template snippet: $f)"; continue; fi
+  FILES+=("$f")
 done < <(
   find modules scenarios -type f \( -name '*.yaml' -o -name '*.yml' \) \
     -not -path '*/chart/*' -not -path '*/charts/*' \
